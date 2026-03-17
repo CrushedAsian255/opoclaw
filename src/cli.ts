@@ -500,6 +500,16 @@ async function main() {
       migrate();
       break;
 
+    case "version":
+    case "v":
+      try {
+        const tag = exec("git describe --tags --abbrev=0 2>/dev/null", { cwd: OP_DIR });
+        console.log(`opoclaw ${tag}`);
+      } catch {
+        console.log("opoclaw (unknown version — no git tags found)");
+      }
+      break;
+
     case "help":
     case "--help":
     case "-h":
@@ -520,6 +530,7 @@ ${B}Commands:${X}
   service remove     Remove auto-start service
   uninstall          Remove command, service, and clean up
   migrate            Convert config.json → config.toml
+  version            Print current version (git tag)
   help               Show this help
 
 ${B}Config:${X}  ${getConfigPath()}
