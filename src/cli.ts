@@ -11,7 +11,9 @@ import { homedir } from "os";
 // ── Paths ──────────────────────────────────────────────────────────────────
 
 const OP_DIR = resolve(import.meta.dir, "..");
-const CONFIG_FILE = resolve(OP_DIR, "config.json");
+import { loadConfig, getConfigPath } from "./config.ts";
+import { parseTOML, toTOML } from "./config.ts";
+
 const USAGE_FILE = resolve(OP_DIR, "usage.json");
 const WORKSPACE_DIR = resolve(OP_DIR, "workspace");
 const BIN_DIR = `${homedir()}/.local/bin`;
@@ -48,13 +50,7 @@ function getOS(): "macos" | "linux" | "windows" {
   return "linux";
 }
 
-function loadConfig(): any {
-  if (!existsSync(CONFIG_FILE)) {
-    err("config.json not found. Run `opoclaw setup` first.");
-    process.exit(1);
-  }
-  return JSON.parse(readFileSync(CONFIG_FILE, "utf-8"));
-}
+
 
 function exec(cmd: string, opts?: { cwd?: string }): string {
   return execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], ...opts }).trim();
@@ -381,7 +377,7 @@ function uninstall() {
   try { unlinkSync(OPCLAW_BIN); } catch {}
   ok("opoclaw uninstalled.");
   console.log(`\n  To remove all data, delete: ${OP_DIR}`);
-  console.log(`  (config.json, workspace, and usage data will be lost)\n`);
+  console.log(`  (config.toml, workspace, and usage data will be lost)\n`);
 }
 
 // ── Install Command (create symlink + service) ─────────────────────────────
@@ -480,7 +476,7 @@ ${B}Commands:${X}
   uninstall          Remove command, service, and clean up
   help               Show this help
 
-${B}Config:${X}  ${CONFIG_FILE}
+${B}Config:${X}  ${getConfigPath()}
 ${B}Workspace:${X}  ${WORKSPACE_DIR}
 ${B}Usage:${X}  ${USAGE_FILE}
 `);

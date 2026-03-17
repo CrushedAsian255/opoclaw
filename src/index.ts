@@ -13,10 +13,8 @@ import { runAgent, type Message as ChatMessage } from "./agent.ts";
 import { getFilePath } from "./workspace.ts";
 import { pendingFileSend, clearPendingFileSend } from "./tools.ts";
 
-import { resolve } from "path";
-const config = await Bun.file(
-    resolve(import.meta.dir, "../config.json")
-).json();
+import { loadConfig, getConfigPath } from "./config.ts";
+const config = loadConfig();
 
 const client = new Client({
     intents: [

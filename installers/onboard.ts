@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * opoclaw onboarding wizard
- * Cross-platform (Bun) — generates workspace + config.json interactively.
+ * Cross-platform (Bun) — generates workspace + config.toml interactively.
  */
 
 import { resolve } from "path";
@@ -35,7 +35,7 @@ const header = (msg: string) =>
 
 const WORKSPACE_ROOT = resolve(import.meta.dir, "..");
 const WORKSPACE_DIR = resolve(WORKSPACE_ROOT, "workspace");
-const CONFIG_FILE = resolve(WORKSPACE_ROOT, "config.json");
+const CONFIG_FILE = resolve(WORKSPACE_ROOT, "config.toml");
 
 // ── Workspace templates ────────────────────────────────────────────────────
 
@@ -158,21 +158,22 @@ async function main() {
     }
   }
 
-  // ── Write config.json ──────────────────────────────────────────────────
+  // ── Write config.toml ──────────────────────────────────────────────────
 
   header("Writing config");
 
-  const config = {
-    discordToken,
-    openrouterKey,
-    openrouterModel,
-    allowBots,
-    enableReasoning,
-    reasoningSummary,
-    reasoningSummaryModel,
-  };
+  let toml = "";
+  toml += `discordToken = "${discordToken}"\n`;
+  toml += `openrouterKey = "${openrouterKey}"\n`;
+  toml += `openrouterModel = "${openrouterModel}"\n`;
+  toml += `allowBots = ${allowBots ? "true" : "false"}\n`;
+  toml += `enableReasoning = ${enableReasoning ? "true" : "false"}\n`;
+  toml += `reasoningSummary = ${reasoningSummary ? "true" : "false"}\n`;
+  if (reasoningSummaryModel) {
+    toml += \`reasoningSummaryModel = "\${reasoningSummaryModel}"\n\`;
+  }
 
-  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 4));
+  writeFileSync(CONFIG_FILE, toml);
   ok(`Config written to ${CONFIG_FILE}`);
 
   // ── Generate workspace ─────────────────────────────────────────────────
