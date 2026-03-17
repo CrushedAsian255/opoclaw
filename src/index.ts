@@ -70,7 +70,11 @@ async function buildChannelHistory(msg: Message): Promise<ChatMessage[]> {
 
 
 client.on(Events.MessageCreate, async (msg: Message) => {
-    if (msg.author.bot && !config.allowBots) return;
+    // Ignore bots unless allowBots is on, but still respond to direct mentions
+    const isBot = msg.author.bot;
+    if (isBot && !config.allowBots && msg.author.id !== client.user!.id) {
+        // Allow mentions through even from bots
+    }
 
     const isMention = msg.mentions.users.has(client.user!.id);
 
@@ -83,7 +87,9 @@ client.on(Events.MessageCreate, async (msg: Message) => {
         }
     }
 
-    if (!isMention && !isReplyToBot) return;
+    // For bots: only respond if mentioned or replied to
+    if (isBot && !config.allowBots && !isMention && !isReplyToBot) return;
+    if (!isBot && !isMention && !isReplyToBot) return;
     await addReaction(msg, EYES);
     const [agentsContent, soulContent, identityContent, history] = await Promise.all([
         readFileAsync("AGENTS.md").catch(() => ""),
