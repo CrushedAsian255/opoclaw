@@ -9,5 +9,6 @@ youll need a config.json like this one ::
     "discordToken": "your Discord token",
     "openrouterKey": "your OpenRouter API key",
     "openrouterModel": "any OpenRouter model"
+    "allowBots": true
 }
 ```
