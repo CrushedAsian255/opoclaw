@@ -1,7 +1,7 @@
 import { resolve, join, relative } from "path";
 import { existsSync } from "fs";
 
-const WORKSPACE_DIR = resolve(import.meta.dir, "../workspace");
+export const WORKSPACE_DIR = resolve(import.meta.dir, "../workspace");
 
 function safePath(relativePath: string): string {
   const cleaned = relativePath.replace(/^\/+/, "");

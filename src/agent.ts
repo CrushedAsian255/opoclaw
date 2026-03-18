@@ -1,5 +1,5 @@
-import { TOOL_DEFINITIONS, handleToolCall } from "./tools.ts";
-import { getApiBaseUrl, getApiKey, getModelId } from "./config.ts";
+import { handleToolCall } from "./tools.ts";
+import { getApiBaseUrl, getApiKey, getModelId, getTools, type OpoclawConfig } from "./config.ts";
 
 interface Message {
     role: "system" | "user" | "assistant" | "tool";
@@ -9,24 +9,13 @@ interface Message {
     name?: string;
 }
 
-interface ToolCall {
+export interface ToolCall {
     id: string;
     type: "function";
     function: {
         name: string;
         arguments: string;
     };
-}
-
-interface Config {
-    openrouter_key?: string;
-    openrouter_model?: string;
-    provider?: "openrouter" | "ollama" | "custom";
-    ollama?: { base_url?: string; model?: string };
-    custom?: { base_url?: string; api_key?: string; model?: string };
-    enable_reasoning?: boolean;
-    reasoning_summary?: boolean;
-    reasoning_summary_model?: string;
 }
 
 interface UsageStats {
@@ -85,13 +74,13 @@ async function recordUsage(usage: any, model: string): Promise<void> {
 
 async function streamCompletion(
     messages: Message[],
-    config: Config,
+    config: OpoclawConfig,
     onFirstToken: () => void
 ): Promise<{ text: string | null; toolCalls: ToolCall[]; usage: any; reasoning: string }> {
     const body: any = {
         model: getModelId(config),
         messages,
-        tools: TOOL_DEFINITIONS,
+        tools: getTools(config),
         tool_choice: "auto",
         stream: true,
     };
@@ -210,7 +199,7 @@ async function streamCompletion(
 
 async function generateReasoningSummary(
     reasoningText: string,
-    config: Config
+    config: OpoclawConfig
 ): Promise<string> {
     const model = config.reasoning_summary_model || getModelId(config);
     const response = await fetch(`${getApiBaseUrl(config)}/v1/chat/completions`, {
@@ -245,9 +234,10 @@ async function generateReasoningSummary(
 export async function runAgent(
     history: Message[],
     systemPrompt: string,
-    config: Config,
-    onFirstToken: () => void
-): Promise<{ text: string; reasoningSummary?: string }> {
+    config: OpoclawConfig,
+    onFirstToken: () => void,
+    onToolCall: (call: ToolCall) => void
+): Promise<{ text: string; reasoningSummary?: string; ranTools?: boolean }> {
     const messages: Message[] = [
         { role: "system", content: systemPrompt },
         ...history,
@@ -286,6 +276,9 @@ export async function runAgent(
                 try {
                     const args = JSON.parse(tc.function.arguments);
                     result = await handleToolCall(tc.function.name, args);
+                    if (onToolCall) {
+                        onToolCall(tc);
+                    }
                 } catch (e: any) {
                     result = `Error: ${e.message}`;
                 }
@@ -312,10 +305,10 @@ export async function runAgent(
             );
         }
 
-        return { text: responseText, reasoningSummary: reasoningSummaryText };
+        return { text: responseText, reasoningSummary: reasoningSummaryText, ranTools: toolCalls.length > 0 };
     }
 
     return { text: "(agent loop limit reached)" };
 }
 
-export type { Message, Config };
+export type { Message, OpoclawConfig };

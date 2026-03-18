@@ -9,7 +9,7 @@ import {
     AttachmentBuilder,
 } from "discord.js";
 import { readFileAsync } from "./workspace.ts";
-import { runAgent, type Message as ChatMessage } from "./agent.ts";
+import { runAgent, type Message as ChatMessage, type ToolCall } from "./agent.ts";
 import { getFilePath } from "./workspace.ts";
 import { pendingFileSend, clearPendingFileSend } from "./tools.ts";
 
@@ -26,6 +26,7 @@ const client = new Client({
 
 const EYES = "👀";
 const THINKING = "🤔";
+const TOOL = "🔧";
 
 async function removeReaction(msg: Message, emoji: string): Promise<void> {
     try {
@@ -115,6 +116,7 @@ client.on(Events.MessageCreate, async (msg: Message) => {
     });
 
     let swappedToThinking = false;
+    let gotToolCall = false;
 
     const onFirstToken = async () => {
         if (swappedToThinking) return;
@@ -122,13 +124,36 @@ client.on(Events.MessageCreate, async (msg: Message) => {
         await removeReaction(msg, EYES);
         await addReaction(msg, THINKING);
     };
+    const onToolCall = async (call: ToolCall) => {
+        if (!gotToolCall) {
+            await addReaction(msg, TOOL);
+            gotToolCall = true;
+        }
+        // assuming there's only one argument we only want to show that
+        let fullText = '-# 🔧  Called `' + call.function.name + '`';
+        try {
+            const args = JSON.parse(call.function.arguments);
+            const argEntries = Object.entries(args);
+            if (argEntries.length === 1) {
+                fullText += ` with \`${argEntries[0]![1]}\``;
+            }
+
+            const lines = args.shell_command.split('\n');
+            if (call.function.name === 'shell' && args.shell_command && args.description) {
+                fullText = '-# 🔧  ' + args.description + '  •  `' + lines[0] + (lines.length > 1 ? '…' : '') + '`';
+            }
+        } catch {
+        }
+        (msg.channel as TextChannel).send(fullText);
+    };
 
     try {
         const { text: responseText, reasoningSummary } = await runAgent(
             history,
             systemPrompt,
             config,
-            onFirstToken
+            onFirstToken,
+            onToolCall,
         );
 
         // Prefix reasoning summary if it's a real summary (not fallback)

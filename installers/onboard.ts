@@ -186,7 +186,7 @@ async function main() {
   toml += `enable_reasoning = ${enableReasoning ? "true" : "false"}\n`;
   toml += `reasoning_summary = ${reasoningSummary ? "true" : "false"}\n`;
   if (reasoningSummaryModel) {
-    toml += \`reasoningSummaryModel = "\${reasoningSummaryModel}"\n\`;
+    toml += `reasoningSummaryModel = "\${reasoningSummaryModel}"\n`;
   }
 
   // Provider config (nested sections)
