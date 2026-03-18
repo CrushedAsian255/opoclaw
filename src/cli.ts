@@ -132,7 +132,7 @@ async function notifyUpdateDiscord(newVersion: string) {
     await fetch("https://discord.com/api/v10/channels/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bot ${config.discordToken}`,
+        Authorization: `Bot ${config.discord_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ content: msg }),
@@ -450,6 +450,49 @@ function migrate() {
   console.log(`  Old config backed up at: ${backupPath}\n`);
 }
 
+// ── CamelCase → snake_case migration ──────────────────────────────────────
+
+const CAMEL_TO_SNAKE: Record<string, string> = {
+  discordToken: "discord_token",
+  openrouterKey: "openrouter_key",
+  openrouterModel: "openrouter_model",
+  allowBots: "allow_bots",
+  enableReasoning: "enable_reasoning",
+  reasoningSummary: "reasoning_summary",
+  reasoningSummaryModel: "reasoning_summary_model",
+  notifyChannel: "notify_channel",
+};
+
+function migrateToSnakeCase() {
+  const tomlPath = resolve(OP_DIR, "config.toml");
+  if (!existsSync(tomlPath)) {
+    warn("No config.toml found — nothing to migrate.");
+    return;
+  }
+
+  let text = readFileSync(tomlPath, "utf-8");
+  let changed = false;
+
+  for (const [camel, snake] of Object.entries(CAMEL_TO_SNAKE)) {
+    const regex = new RegExp(`^\s*${camel}(\s*=)`, "gm");
+    if (regex.test(text)) {
+      text = text.replace(regex, `${snake}$1`);
+      changed = true;
+      info(`  ${camel} → ${snake}`);
+    }
+  }
+
+  if (!changed) {
+    ok("Config.toml already uses snake_case keys.");
+    return;
+  }
+
+  const backupPath = tomlPath + ".bak";
+  writeFileSync(backupPath, readFileSync(tomlPath));
+  writeFileSync(tomlPath, text);
+  ok("Migrated camelCase → snake_case. Backup at config.toml.bak");
+}
+
 // ── CLI Router ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -498,6 +541,7 @@ async function main() {
 
     case "migrate":
       migrate();
+      migrateToSnakeCase();
       break;
 
     case "version":
@@ -529,7 +573,7 @@ ${B}Commands:${X}
   service install    Install auto-start service (systemd/launchd)
   service remove     Remove auto-start service
   uninstall          Remove command, service, and clean up
-  migrate            Convert config.json → config.toml
+  migrate            Upgrade config (JSON→TOML, camelCase→snake_case)
   version            Print current version (git tag)
   help               Show this help
 

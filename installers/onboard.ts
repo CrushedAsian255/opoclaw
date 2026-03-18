@@ -163,12 +163,12 @@ async function main() {
   header("Writing config");
 
   let toml = "";
-  toml += `discordToken = "${discordToken}"\n`;
-  toml += `openrouterKey = "${openrouterKey}"\n`;
-  toml += `openrouterModel = "${openrouterModel}"\n`;
-  toml += `allowBots = ${allowBots ? "true" : "false"}\n`;
-  toml += `enableReasoning = ${enableReasoning ? "true" : "false"}\n`;
-  toml += `reasoningSummary = ${reasoningSummary ? "true" : "false"}\n`;
+  toml += `discord_token = "${discordToken}"\n`;
+  toml += `openrouter_key = "${openrouterKey}"\n`;
+  toml += `openrouter_model = "${openrouterModel}"\n`;
+  toml += `allow_bots = ${allowBots ? "true" : "false"}\n`;
+  toml += `enable_reasoning = ${enableReasoning ? "true" : "false"}\n`;
+  toml += `reasoning_summary = ${reasoningSummary ? "true" : "false"}\n`;
   if (reasoningSummaryModel) {
     toml += \`reasoningSummaryModel = "\${reasoningSummaryModel}"\n\`;
   }

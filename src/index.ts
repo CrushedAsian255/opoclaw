@@ -77,7 +77,7 @@ client.on(Events.MessageCreate, async (msg: Message) => {
 
     // Ignore other bots unless allowBots is on
     const isBot = msg.author.bot;
-    if (isBot && !config.allowBots) return;
+    if (isBot && !config.allow_bots) return;
 
     const isMention = msg.mentions.users.has(client.user!.id);
 
@@ -231,4 +231,4 @@ client.once(Events.ClientReady, (c) => {
     console.log(`Logged in as ${c.user.tag}`);
 });
 
-await client.login(config.discordToken);
+await client.login(config.discord_token);

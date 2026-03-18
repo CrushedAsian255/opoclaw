@@ -87,14 +87,14 @@ export function formatTOMLValue(value: any): string {
 // ── Config interface ───────────────────────────────────────────────────────
 
 export interface OpoclawConfig {
-    discordToken: string;
-    openrouterKey: string;
-    openrouterModel: string;
-    allowBots?: boolean;
-    enableReasoning?: boolean;
-    reasoningSummary?: boolean;
-    reasoningSummaryModel?: string;
-    notifyChannel?: string;
+    discord_token: string;
+    openrouter_key: string;
+    openrouter_model: string;
+    allow_bots?: boolean;
+    enable_reasoning?: boolean;
+    reasoning_summary?: boolean;
+    reasoning_summary_model?: string;
+    notify_channel?: string;
 }
 
 export function loadConfig(): OpoclawConfig {

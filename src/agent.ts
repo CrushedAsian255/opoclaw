@@ -18,11 +18,11 @@ interface ToolCall {
 }
 
 interface Config {
-    openrouterKey: string;
-    openrouterModel: string;
-    enableReasoning?: boolean;
-    reasoningSummary?: boolean;
-    reasoningSummaryModel?: string;
+    openrouter_key: string;
+    openrouter_model: string;
+    enable_reasoning?: boolean;
+    reasoning_summary?: boolean;
+    reasoning_summary_model?: string;
 }
 
 interface UsageStats {
@@ -85,7 +85,7 @@ async function streamCompletion(
     onFirstToken: () => void
 ): Promise<{ text: string | null; toolCalls: ToolCall[]; usage: any }> {
     const body: any = {
-        model: config.openrouterModel,
+        model: config.openrouter_model,
         messages,
         tools: TOOL_DEFINITIONS,
         tool_choice: "auto",
@@ -93,14 +93,14 @@ async function streamCompletion(
     };
 
     // Add reasoning toggle
-    if (config.enableReasoning) {
+    if (config.enable_reasoning) {
         body.reasoning = { enabled: true };
     }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${config.openrouterKey}`,
+            Authorization: `Bearer ${config.openrouter_key}`,
             "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -202,11 +202,11 @@ async function generateReasoningSummary(
     reasoningText: string,
     config: Config
 ): Promise<string> {
-    const model = config.reasoningSummaryModel || config.openrouterModel;
+    const model = config.reasoning_summary_model || config.openrouter_model;
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${config.openrouterKey}`,
+            Authorization: `Bearer ${config.openrouter_key}`,
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -261,7 +261,7 @@ export async function runAgent(
 
         // Record usage
         if (usage) {
-            await recordUsage(usage, config.openrouterModel);
+            await recordUsage(usage, config.openrouter_model);
         }
 
         if (toolCalls.length > 0) {
@@ -295,7 +295,7 @@ export async function runAgent(
 
         // Generate reasoning summary if enabled and we have reasoning text
         let reasoningSummaryText: string | undefined;
-        if (config.reasoningSummary && config.enableReasoning && result.reasoning) {
+        if (config.reasoning_summary && config.enable_reasoning && result.reasoning) {
             reasoningSummaryText = await generateReasoningSummary(
                 result.reasoning,
                 config
