@@ -19,7 +19,7 @@ import { runAgent, type Message as ChatMessage, type ToolCall } from "./agent.ts
 import { getFilePath } from "./workspace.ts";
 import { pendingFileSend, clearPendingFileSend } from "./tools.ts";
 
-import { getSemanticSearchEnabled, loadConfig } from "./config.ts";
+import { getSemanticSearchEnabled, loadConfig, useTomlFiles } from "./config.ts";
 
 const client = new Client({
     intents: [
@@ -146,21 +146,26 @@ client.on(Events.MessageCreate, async (msg: Message) => {
 
     await addReaction(msg, EYES);
 
+    const useToml = useTomlFiles(config);
+
     const [agentsContent, soulContent, identityContent, memoryContent, history] = await Promise.all([
-        readFileAsync("AGENTS.md").catch(() => ""),
-        readFileAsync("SOUL.md").catch(() => ""),
-        readFileAsync("IDENTITY.md").catch(() => ""),
-        readFileAsync("MEMORY.md").catch(() => ""),
+        readFileAsync(useToml ? 'agents.toml' : 'AGENTS.md').catch(() => ""),
+        readFileAsync(useToml ? 'soul.toml' : 'SOUL.md').catch(() => ""),
+        readFileAsync(useToml ? 'identity.toml' : 'IDENTITY.md').catch(() => ""),
+        readFileAsync(useToml ? 'memory.toml' : 'MEMORY.md').catch(() => ""),
         buildChannelHistory(msg),
     ]);
 
     const systemPromptParts: string[] = [];
     if (soulContent) systemPromptParts.push(soulContent);
-    if (identityContent) systemPromptParts.push("\n## Your Identity\nThis is your IDENTITY.md.\n```\n" + identityContent + "\n```");
+    if (identityContent) systemPromptParts.push("\n## Your Identity\nThis is your " + (useToml ? "identity.toml" : "IDENTITY.md") + ".\n```\n" + identityContent + "\n```");
     if (agentsContent) systemPromptParts.push("\n## Operating Instructions\n" + agentsContent);
-    if (memoryContent) systemPromptParts.push("\n## Memory\nThis is your MEMORY.md. You can edit that file, but be careful not to accidentally erase information in it.\n```\n" + memoryContent + "\n```");
+    if (memoryContent) systemPromptParts.push("\n## Memory\nThis is your " + (useToml ? "memory.toml" : "MEMORY.md") + ". You can edit that file, but be careful not to accidentally erase information in it.\n```\n" + memoryContent + "\n```");
     if (getSemanticSearchEnabled(config)) {
-        systemPromptParts.push("\n## Semantic Search\nYou have access to a semantic search command in your shell. Use `semantic-search <query>` and it'll return lines in any file that match embeddings. You don't need to worry about gaming this, remember it's semantic and not keyword based, so even just a description of what you're looking for can work. The command caches efficiently as well.");
+        systemPromptParts.push("\n## Semantic Search\nYou have access to a semantic search command in your shell. Use `semantic-search <query>` and it'll return lines in any file that match embeddings. You don't need to worry about gaming this, remember it's semantic and not keyword based, so even just a description of what you're looking for can work. The command caches efficiently as well.\nThis is the recommended way to search through your memory. You can do multiple searches at once using normal shell syntax like semicolons: `semantic-search <query1>; semantic-search <query2>`");
+    }
+    if (useToml) {
+        systemPromptParts.push("\n## TOML Editing\nIn your shell, you have a convenient CLI for easy editing. You can use `toml <file> <key> push <value>` to push a value to a key, or `toml <file> <key> remove <value>` to remove a value. If the key or file doesn't exist, it will be created for you.\nThis is the primary way you should be managing memory. You can for example use `toml memory.toml notes push \"<something you want to remember>\"` to add a note to your memory, which will persist across sessions.");
     }
     const systemPrompt = systemPromptParts.join("\n") || "You are a helpful assistant.";
 
