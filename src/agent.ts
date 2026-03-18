@@ -1,4 +1,5 @@
 import { TOOL_DEFINITIONS, handleToolCall } from "./tools.ts";
+import { getApiBaseUrl, getApiKey, getModelId } from "./config.ts";
 
 interface Message {
     role: "system" | "user" | "assistant" | "tool";
@@ -18,8 +19,11 @@ interface ToolCall {
 }
 
 interface Config {
-    openrouter_key: string;
-    openrouter_model: string;
+    openrouter_key?: string;
+    openrouter_model?: string;
+    provider?: "openrouter" | "ollama" | "custom";
+    ollama?: { base_url?: string; model?: string };
+    custom?: { base_url?: string; api_key?: string; model?: string };
     enable_reasoning?: boolean;
     reasoning_summary?: boolean;
     reasoning_summary_model?: string;
@@ -85,7 +89,7 @@ async function streamCompletion(
     onFirstToken: () => void
 ): Promise<{ text: string | null; toolCalls: ToolCall[]; usage: any }> {
     const body: any = {
-        model: config.openrouter_model,
+        model: getModelId(config),
         messages,
         tools: TOOL_DEFINITIONS,
         tool_choice: "auto",
@@ -97,10 +101,10 @@ async function streamCompletion(
         body.reasoning = { enabled: true };
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch(`${getApiBaseUrl(config)}/v1/chat/completions`, {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${config.openrouter_key}`,
+            Authorization: `Bearer ${getApiKey(config)}`,
             "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -202,11 +206,11 @@ async function generateReasoningSummary(
     reasoningText: string,
     config: Config
 ): Promise<string> {
-    const model = config.reasoning_summary_model || config.openrouter_model;
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const model = config.reasoning_summary_model || getModelId(config);
+    const response = await fetch(`${getApiBaseUrl(config)}/v1/chat/completions`, {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${config.openrouter_key}`,
+            Authorization: `Bearer ${getApiKey(config)}`,
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -261,7 +265,7 @@ export async function runAgent(
 
         // Record usage
         if (usage) {
-            await recordUsage(usage, config.openrouter_model);
+            await recordUsage(usage, getModelId(config));
         }
 
         if (toolCalls.length > 0) {

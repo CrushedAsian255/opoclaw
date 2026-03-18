@@ -132,6 +132,22 @@ async function main() {
     process.exit(1);
   }
 
+  // ── Provider ─────────────────────────────────────────────────────────────
+  const providerAns = await ask("Provider [openrouter/ollama/custom] (openrouter): ");
+  const p = providerAns.toLowerCase();
+  const provider: "openrouter" | "ollama" | "custom" = p === "ollama" ? "ollama" : p === "custom" ? "custom" : "openrouter";
+
+  let ollamaBaseURL = "", ollamaModel = "";
+  let customBaseURL = "", customAPIKey = "", customModel = "";
+  if (provider === "ollama") {
+    ollamaBaseURL = await ask("Ollama base URL [http://localhost:11434]: ") || "http://localhost:11434";
+    ollamaModel = await ask("Ollama model [llama3.2]: ") || "llama3.2";
+  } else if (provider === "custom") {
+    customBaseURL = await ask("Base URL (no /v1/chat/completions): ");
+    customAPIKey = await ask("API key (blank if none): ");
+    customModel = await ask("Model name: ");
+  }
+
   // ── Model ──────────────────────────────────────────────────────────────
 
   const model = await ask("Model ID [openrouter/auto]: ");
@@ -171,6 +187,21 @@ async function main() {
   toml += `reasoning_summary = ${reasoningSummary ? "true" : "false"}\n`;
   if (reasoningSummaryModel) {
     toml += \`reasoningSummaryModel = "\${reasoningSummaryModel}"\n\`;
+  }
+
+  // Provider config (nested sections)
+  if (provider !== "openrouter") {
+    toml += '\nprovider = "' + provider + '"\n';
+  }
+  if (provider === "ollama") {
+    toml += '\n[ollama]\n';
+    toml += 'base_url = "' + ollamaBaseURL + '"\n';
+    toml += 'model = "' + ollamaModel + '"\n';
+  } else if (provider === "custom") {
+    toml += '\n[custom]\n';
+    toml += 'base_url = "' + customBaseURL + '"\n';
+    toml += 'api_key = "' + customAPIKey + '"\n';
+    toml += 'model = "' + customModel + '"\n';
   }
 
   writeFileSync(CONFIG_FILE, toml);

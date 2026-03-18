@@ -554,6 +554,47 @@ async function main() {
       }
       break;
 
+    case "explainer":
+    case "explain":
+      console.log(`
+${B}How opoclaw works${X}
+
+opoclaw is a Discord bot framework. When someone mentions the bot:
+
+1. ${B}Message received${X} — Discord event triggers the MessageCreate handler.
+   Only messages that @mention the bot (or reply to it) are processed.
+   Own messages are ignored. Other bots ignored unless allow_bots=true.
+
+2. ${B}System prompt loaded${X} — Three workspace files are read:
+   - SOUL.md — personality, tone, rules
+   - IDENTITY.md — name, appearance, self-description
+   - AGENTS.md — operating instructions, memory, safety
+   These form the system prompt sent to the LLM.
+
+3. ${B}Channel history${X} — Last 50 messages fetched as context.
+
+4. ${B}LLM call${X} — Prompt + history sent to configured provider
+   (OpenRouter, Ollama, or custom endpoint). The model generates
+   a response. If reasoning is enabled, thinking tokens are captured.
+
+5. ${B}Tools${X} — The model can request tool calls (file ops, etc.).
+   Tools execute in a loop (max 20 iterations) until final response.
+
+6. ${B}Response sent${X} — Reply sent to Discord, split at 1990 chars.
+
+${B}Security${X}
+- Workspace files go to the LLM as prompt context. Don't put secrets there.
+- API keys stay in config.toml, never exposed to the LLM.
+- No shell commands or filesystem access outside workspace.
+- Max 20 agent iterations prevents runaway loops.
+
+${B}Config${X}
+config.toml at project root. Onboard wizard: opoclaw onboard.
+Keys: discord_token, openrouter_key (or ollama/custom).
+Toggle: allow_bots, enable_reasoning, reasoning_summary.
+`);
+      break;
+
     case "help":
     case "--help":
     case "-h":
@@ -573,6 +614,7 @@ ${B}Commands:${X}
   service install    Install auto-start service (systemd/launchd)
   service remove     Remove auto-start service
   uninstall          Remove command, service, and clean up
+  explainer          How opoclaw works
   migrate            Upgrade config (JSON→TOML, camelCase→snake_case)
   version            Print current version (git tag)
   help               Show this help
