@@ -102,6 +102,7 @@ export interface OpoclawConfig {
     notify_channel?: string;
     basic_tools?: boolean;
     ollama_semantic_search?: boolean;
+    use_toml_files?: boolean;
 }
 
 export function loadConfig(): OpoclawConfig {
@@ -153,4 +154,8 @@ export function getTools(config: OpoclawConfig): any[] {
 
 export function getSemanticSearchEnabled(config: OpoclawConfig): boolean {
     return config.ollama_semantic_search ?? false;
+}
+
+export function useTomlFiles(config: OpoclawConfig): boolean {
+    return config.use_toml_files ?? false;
 }
