@@ -2,7 +2,11 @@ import { resolve } from "path";
 import { existsSync, readFileSync } from "fs";
 import { TOOLS } from "./tools";
 
-const CONFIG_FILE = resolve(import.meta.dir, "../config.toml");
+const DEFAULT_CONFIG_FILE = resolve(import.meta.dir, "../config.toml");
+
+function getConfigFilePath(): string {
+    return process.env.OPOCLAW_CONFIG_PATH || DEFAULT_CONFIG_FILE;
+}
 
 // ── Minimal TOML parser (for our config format) ────────────────────────────
 
@@ -16,12 +20,17 @@ export function parseTOML(text: string): Record<string, any> {
         const line = raw.replace(/#.*$/, "").trim();
         if (!line) continue;
 
-        // Section header: [key]
-        const sectionMatch = line.match(/^\[(\w+)\]$/);
+        // Section header: [key] or [key.subkey]
+        const sectionMatch = line.match(/^\[([A-Za-z0-9_.-]+)\]$/);
         if (sectionMatch && sectionMatch[1]) {
             currentKey = sectionMatch[1];
-            result[currentKey] = result[currentKey] || {};
-            currentSection = result[currentKey];
+            const parts = currentKey.split(".").filter(Boolean);
+            let cursor: Record<string, any> = result;
+            for (const part of parts) {
+                cursor[part] = cursor[part] || {};
+                cursor = cursor[part];
+            }
+            currentSection = cursor;
             continue;
         }
 
@@ -55,21 +64,38 @@ export function toTOML(config: Record<string, any>): string {
     const simple: Record<string, any> = {};
     const sections: Record<string, Record<string, any>> = {};
 
-    for (const [key, value] of Object.entries(config)) {
-        if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-            sections[key] = value;
-        } else {
-            simple[key] = value;
+    function ensureSection(name: string): Record<string, any> {
+        if (!sections[name]) sections[name] = {};
+        return sections[name]!;
+    }
+
+    function walk(obj: Record<string, any>, prefix = ""): void {
+        for (const [key, value] of Object.entries(obj)) {
+            const isObj =
+                typeof value === "object" && value !== null && !Array.isArray(value);
+            if (isObj) {
+                const nextPrefix = prefix ? `${prefix}.${key}` : key;
+                walk(value, nextPrefix);
+            } else {
+                if (!prefix) {
+                    simple[key] = value;
+                } else {
+                    ensureSection(prefix)[key] = value;
+                }
+            }
         }
     }
+
+    walk(config);
 
     // Simple keys first
     for (const [key, value] of Object.entries(simple)) {
         out += `${key} = ${formatTOMLValue(value)}\n`;
     }
 
-    // Sections
-    for (const [section, values] of Object.entries(sections)) {
+    // Sections (sorted for stability)
+    for (const section of Object.keys(sections).sort()) {
+        const values = sections[section]!;
         out += `\n[${section}]\n`;
         for (const [key, value] of Object.entries(values)) {
             out += `${key} = ${formatTOMLValue(value)}\n`;
@@ -89,60 +115,82 @@ export function formatTOMLValue(value: any): string {
 // ── Config interface ───────────────────────────────────────────────────────
 
 export interface OpoclawConfig {
-    discord_token: string;
-    openrouter_key: string;
-    openrouter_model: string;
-    provider?: "openrouter" | "ollama" | "custom";
-    ollama?: { base_url?: string; model?: string };
-    custom?: {
-        base_url?: string;
-        api_key?: string;
-        model?: string;
-        api_type?: "openai" | "anthropic";
-        anthropic_version?: string;
-        max_tokens?: number;
+    provider?: {
+        active?: "openrouter" | "ollama" | "custom";
+        openrouter?: { api_key?: string; model?: string; base_url?: string };
+        ollama?: { base_url?: string; model?: string };
+        custom?: {
+            base_url?: string;
+            api_key?: string;
+            model?: string;
+            api_type?: "openai" | "anthropic";
+            anthropic_version?: string;
+            max_tokens?: number;
+        };
     };
-    allow_bots?: boolean;
+    channel?: {
+        discord?: {
+            enabled?: boolean;
+            token?: string;
+            allow_bots?: boolean;
+            notify_channel?: string;
+        };
+        irc?: {
+            enabled?: boolean;
+            server?: string;
+            port?: number;
+            tls?: boolean;
+            nick?: string;
+            username?: string;
+            realname?: string;
+            password?: string;
+            channels?: string;
+        };
+    };
     enable_reasoning?: boolean;
     reasoning_summary?: boolean;
     reasoning_summary_model?: string;
-    notify_channel?: string;
     basic_tools?: boolean;
     ollama_semantic_search?: boolean;
     use_toml_files?: boolean;
     authorized_user_id?: string;
     update_channel?: "stable" | "unstable";
     exposed_commands?: string[];
+    enable_web_fetch?: boolean;
 }
 
 export function loadConfig(): OpoclawConfig {
-    if (!existsSync(CONFIG_FILE)) {
-        throw new Error(`config.toml not found at ${CONFIG_FILE}`);
+    const configPath = getConfigFilePath();
+    if (!existsSync(configPath)) {
+        throw new Error(`config.toml not found at ${configPath}`);
     }
-    const text = readFileSync(CONFIG_FILE, "utf-8");
+    const text = readFileSync(configPath, "utf-8");
     return parseTOML(text) as unknown as OpoclawConfig;
 }
 
 export function getConfigPath(): string {
-    return CONFIG_FILE;
+    return getConfigFilePath();
 }
 
 export function getApiBaseUrl(config: OpoclawConfig): string {
-    if (config.provider === "custom") return config.custom?.base_url || "http://localhost:11434";
-    if (config.provider === "ollama") return config.ollama?.base_url || "http://localhost:11434";
-    return "https://openrouter.ai/api";
+    const active = getActiveProvider(config);
+    if (active === "custom") return config.provider?.custom?.base_url || "http://localhost:11434";
+    if (active === "ollama") return config.provider?.ollama?.base_url || "http://localhost:11434";
+    return config.provider?.openrouter?.base_url || "https://openrouter.ai/api";
 }
 
 export function getApiKey(config: OpoclawConfig): string {
-    if (config.provider === "custom") return config.custom?.api_key || "";
-    if (config.provider === "ollama") return "";
-    return config.openrouter_key || "";
+    const active = getActiveProvider(config);
+    if (active === "custom") return config.provider?.custom?.api_key || "";
+    if (active === "ollama") return "";
+    return config.provider?.openrouter?.api_key || "";
 }
 
 export function getModelId(config: OpoclawConfig): string {
-    if (config.provider === "custom") return config.custom?.model || "unknown";
-    if (config.provider === "ollama") return config.ollama?.model || "llama3.2";
-    return config.openrouter_model || "openrouter/auto";
+    const active = getActiveProvider(config);
+    if (active === "custom") return config.provider?.custom?.model || "unknown";
+    if (active === "ollama") return config.provider?.ollama?.model || "llama3.2";
+    return config.provider?.openrouter?.model || "openrouter/auto";
 }
 
 export function getTools(config: OpoclawConfig): any[] {
@@ -153,8 +201,14 @@ export function getTools(config: OpoclawConfig): any[] {
         TOOLS.restart_gateway,
         TOOLS.hibernate_gateway,
         TOOLS.update_opoclaw,
+        TOOLS.use_skill,
+        TOOLS.list_skills,
         TOOLS.shell,
     ];
+
+    if (config.enable_web_fetch ?? true) {
+        tools.push(TOOLS.web_fetch);
+    }
 
     if (config.basic_tools ?? true) {
         tools.push(TOOLS.read_file, TOOLS.edit_file, TOOLS.list_files);
@@ -169,6 +223,10 @@ export function getSemanticSearchEnabled(config: OpoclawConfig): boolean {
 
 export function useTomlFiles(config: OpoclawConfig): boolean {
     return config.use_toml_files ?? false;
+}
+
+export function getActiveProvider(config: OpoclawConfig): "openrouter" | "ollama" | "custom" {
+    return config.provider?.active || "openrouter";
 }
 
 export function getExposedCommands(config: OpoclawConfig): string[] {
