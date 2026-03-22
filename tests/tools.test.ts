@@ -82,41 +82,10 @@ describe("tools", () => {
     }
   });
 
-  test("search uses searx when available", async () => {
-    process.env.OPOCLAW_SEARCH_NO_PYTHON = "1";
+  test("search uses duckduckgo html parser", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: any) => {
       const url = String(input);
-      if (url.includes("searx") && url.includes("format=json")) {
-        return new Response(
-          JSON.stringify({ results: [{ title: "Example", url: "https://example.com", content: "Snippet" }] }),
-          { status: 200 },
-        );
-      }
-      return new Response("{}", { status: 200 });
-    }) as any;
-
-    try {
-      const res = await handleToolCall("search", { query: "test", count: "3" } as any, {} as any);
-      expect(res).toContain("Example");
-      expect(res).toContain("https://example.com");
-    } finally {
-      globalThis.fetch = originalFetch as any;
-      delete process.env.OPOCLAW_SEARCH_NO_PYTHON;
-    }
-  });
-
-  test("search falls back to duckduckgo html", async () => {
-    process.env.OPOCLAW_SEARCH_NO_PYTHON = "1";
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (input: any) => {
-      const url = String(input);
-      if (url.includes("searx") && url.includes("format=json")) {
-        return new Response(JSON.stringify({ results: [] }), { status: 200 });
-      }
-      if (url.includes("duckduckgo.com/?") && url.includes("format=json")) {
-        return new Response(JSON.stringify({ RelatedTopics: [] }), { status: 200 });
-      }
       if (url.includes("duckduckgo.com/html/")) {
         const html = `<a class=\"result__a\" href=\"https://ddg.example\">Title</a><a class=\"result__snippet\">Snippet</a>`;
         return new Response(html, { status: 200 });
@@ -130,7 +99,6 @@ describe("tools", () => {
       expect(res).toContain("Title");
     } finally {
       globalThis.fetch = originalFetch as any;
-      delete process.env.OPOCLAW_SEARCH_NO_PYTHON;
     }
   });
 });

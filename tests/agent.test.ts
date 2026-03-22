@@ -1,17 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { runAgent } from "../src/agent.ts";
 
-function sseResponse(chunks: string[]): Response {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  });
-  return new Response(stream, { status: 200 });
+function sseResponse(payload: string): Response {
+  return new Response(payload, { status: 200 });
 }
 
 describe("agent", () => {
@@ -20,7 +11,7 @@ describe("agent", () => {
     globalThis.fetch = (async () => {
       const payload = `data: ${JSON.stringify({ choices: [{ delta: { content: "Hello" }, finish_reason: null }], usage: { prompt_tokens: 1, completion_tokens: 1 } })}\n\n` +
         "data: [DONE]\n\n";
-      return sseResponse([payload]);
+      return sseResponse(payload);
     }) as any;
 
     try {

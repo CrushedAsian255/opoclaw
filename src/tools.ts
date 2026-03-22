@@ -374,6 +374,7 @@ import path from "path";
 import { mkdir, readdir, readFile, writeFile, rm, stat as fsStat } from "fs/promises";
 import { getConfigPath, getExposedCommands, getSemanticSearchEnabled, parseTOML, toTOML, type OpoclawConfig } from "./config.ts";
 import { listSkills, readSkill } from "./skills.ts";
+import { DuckDuckGoSearch } from "./search/duckduckgo.ts";
 const toReal = (rel: string) => path.join(WORKSPACE_DIR, rel);
 
 shell.mount("/home/", {
@@ -420,93 +421,12 @@ function stripHtml(input: string): string {
 }
 
 async function duckDuckGoSearch(query: string, count = 5): Promise<string> {
-    const results: Array<{ title: string; url: string; snippet: string }> = [];
-
-    // 1) JSON instant answer API
-    try {
-        const apiUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
-        const res = await fetch(apiUrl, { headers: { "User-Agent": "opoclaw-bot/1.0" } });
-        if (res.ok) {
-            const data: any = await res.json();
-            if (data?.AbstractURL && data?.AbstractText) {
-                results.push({
-                    title: data.Heading || "Result",
-                    url: data.AbstractURL,
-                    snippet: data.AbstractText,
-                });
-            }
-            const related = Array.isArray(data?.RelatedTopics) ? data.RelatedTopics : [];
-            for (const item of related) {
-                if (results.length >= count) break;
-                if (item?.Text && item?.FirstURL) {
-                    results.push({ title: item.Text.split(" - ")[0] || item.Text, url: item.FirstURL, snippet: item.Text });
-                } else if (Array.isArray(item?.Topics)) {
-                    for (const sub of item.Topics) {
-                        if (results.length >= count) break;
-                        if (sub?.Text && sub?.FirstURL) {
-                            results.push({ title: sub.Text.split(" - ")[0] || sub.Text, url: sub.FirstURL, snippet: sub.Text });
-                        }
-                    }
-                }
-            }
-        }
-    } catch {
-        // ignore and fall back
-    }
-
-    // 2) HTML results page
-    if (results.length === 0) {
-        try {
-            const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}&kl=us-en`;
-            const res = await fetch(url, { headers: { "User-Agent": "opoclaw-bot/1.0" } });
-            if (res.ok) {
-                const html = await res.text();
-                const resultRegex = /<a[^>]*class=\"result__a\"[^>]*href=\"([^\"]+)\"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<(?:a|div|span)[^>]*class=\"result__snippet\"[^>]*>([\s\S]*?)<\/(?:a|div|span)>/g;
-                let match: RegExpExecArray | null;
-                while ((match = resultRegex.exec(html)) && results.length < count) {
-                    const url = decodeHtmlEntities(match[1] || "");
-                    const title = decodeHtmlEntities(stripHtml(match[2] || ""));
-                    const snippet = decodeHtmlEntities(stripHtml(match[3] || ""));
-                    if (title && url) {
-                        results.push({ title, url, snippet });
-                    }
-                }
-            }
-        } catch {
-            // ignore and fall back
-        }
-    }
-
-    // 3) Lite HTML fallback
-    if (results.length === 0) {
-        try {
-            const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
-            const res = await fetch(url, { headers: { "User-Agent": "opoclaw-bot/1.0" } });
-            if (res.ok) {
-                const html = await res.text();
-                const rowRegex = /<a[^>]*class=\"result-link\"[^>]*href=\"([^\"]+)\"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<td[^>]*class=\"result-snippet\"[^>]*>([\s\S]*?)<\/td>/g;
-                let match: RegExpExecArray | null;
-                while ((match = rowRegex.exec(html)) && results.length < count) {
-                    const url = decodeHtmlEntities(match[1] || "");
-                    const title = decodeHtmlEntities(stripHtml(match[2] || ""));
-                    const snippet = decodeHtmlEntities(stripHtml(match[3] || ""));
-                    if (title && url) {
-                        results.push({ title, url, snippet });
-                    }
-                }
-            }
-        } catch {
-            // ignore
-        }
-    }
-
-    if (results.length === 0) {
-        return "(no results)";
-    }
-
+    const provider = new DuckDuckGoSearch();
+    const results = await provider.search(query, count);
+    if (!results.length) return "(no results)";
     return results
         .slice(0, count)
-        .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.snippet}`)
+        .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.snippet}`.trim())
         .join("\n\n");
 }
 
@@ -551,29 +471,6 @@ async function searxSearch(query: string, count = 5): Promise<string> {
     return "(no results)";
 }
 
-async function pythonDuckDuckGoSearch(query: string, count = 5): Promise<string> {
-    if (process.env.OPOCLAW_SEARCH_NO_PYTHON) {
-        return "(no results)";
-    }
-    const scriptPath = path.resolve(import.meta.dir, "duckduckgo.py");
-    const proc = Bun.spawn({
-        cmd: ["python3", scriptPath, query, String(count)],
-        stdout: "pipe",
-        stderr: "pipe",
-    });
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    const code = await proc.exited;
-    if (code !== 0) {
-        throw new Error(stderr || `duckduckgo.py exited with ${code}`);
-    }
-    const data = JSON.parse(stdout || "[]");
-    if (!Array.isArray(data) || data.length === 0) return "(no results)";
-    return data
-        .slice(0, count)
-        .map((r: any, i: number) => `${i + 1}. ${r.title}\n${r.url}\n${r.snippet || ""}`.trim())
-        .join("\n\n");
-}
 
 function setNestedValue(obj: Record<string, any>, keyPath: string, value: any): void {
     const parts = keyPath.split(".").map((p) => p.trim()).filter(Boolean);
@@ -694,13 +591,6 @@ export async function handleToolCall(
             const countRaw = Number(args.count ?? 5);
             const count = Number.isFinite(countRaw) ? Math.min(Math.max(1, countRaw), 10) : 5;
             const q = String(args.query);
-            try {
-                const ddg = await pythonDuckDuckGoSearch(q, count);
-                if (ddg !== "(no results)") return ddg;
-            } catch {
-            }
-            const searx = await searxSearch(q, count);
-            if (searx !== "(no results)") return searx;
             return await duckDuckGoSearch(q, count);
         }
         case "use_skill": {
