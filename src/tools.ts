@@ -224,6 +224,31 @@ export const TOOLS: { [id: string]: any } = {
             },
         },
     },
+    react_message: {
+        type: "function",
+        function: {
+            name: "react_message",
+            description: "React to a Discord message by ID in a given channel.",
+            parameters: {
+                type: "object",
+                properties: {
+                    channel_id: {
+                        type: "string",
+                        description: "Discord channel ID containing the message.",
+                    },
+                    message_id: {
+                        type: "string",
+                        description: "Discord message ID to react to.",
+                    },
+                    emoji: {
+                        type: "string",
+                        description: "Emoji to react with (unicode or custom emoji like name:id).",
+                    },
+                },
+                required: ["channel_id", "message_id", "emoji"],
+            },
+        },
+    },
     shell: {
         type: "function",
         function: {
@@ -625,6 +650,42 @@ export async function handleToolCall(
             if (!res.ok) throw new Error(`web_fetch failed (${res.status})`);
             const text = await res.text();
             return text;
+        }
+        case "react_message": {
+            const channelId = String(args.channel_id || "");
+            const messageId = String(args.message_id || "");
+            const emoji = String(args.emoji || "");
+            if (!channelId || !messageId || !emoji) {
+                throw new Error("Missing 'channel_id', 'message_id', or 'emoji' argument for react_message.");
+            }
+            const token = config.channel?.discord?.token;
+            if (!token) throw new Error("Discord token missing in config.");
+            const encodedEmoji = encodeURIComponent(emoji);
+            const url = `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}/reactions/${encodedEmoji}/@me`;
+            const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+            let lastErr = "";
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                const res = await fetch(url, { method: "PUT", headers: { Authorization: `Bot ${token}` } });
+                if (res.ok) return "Reaction added.";
+
+                if (res.status === 429) {
+                    let retryAfterMs = 1000;
+                    try {
+                        const body = await res.json();
+                        if (typeof body?.retry_after === "number") {
+                            retryAfterMs = Math.max(0, Math.ceil(body.retry_after * 1000));
+                        }
+                    } catch {
+                    }
+                    await delay(retryAfterMs);
+                    continue;
+                }
+
+                const body = await res.text().catch(() => "");
+                lastErr = `react_message failed (${res.status}): ${body.slice(0, 200)}`;
+                break;
+            }
+            throw new Error(lastErr || "react_message failed after retries.");
         }
         case "shell": {
             if (!shellSetUp) {
