@@ -193,12 +193,18 @@ async function buildChannelHistory(msg: Message): Promise<ChatMessage[]> {
         let text = m.content.replace(/<@!?\d+>/g, "").trim();
         if (!text && m.attachments.size === 0) continue;
 
+        const reactionList = Array.from(m.reactions.cache.values())
+            .map((r) => `${r.emoji.name}${r.count && r.count > 1 ? `×${r.count}` : ""}`)
+            .join(" ");
+        const reactionSuffix = reactionList ? ` (reactions: ${reactionList})` : "";
+        const idPrefix = `[id:${m.id}] `;
+
         if (isBot) {
-            history.push({ role: "assistant", content: text });
+            history.push({ role: "assistant", content: `${idPrefix}${text}${reactionSuffix}` });
         } else {
             history.push({
                 role: "user",
-                content: `[${m.author.displayName}]: ${text || "(attachment)"}`,
+                content: `${idPrefix}[${m.author.displayName}]: ${text || "(attachment)"}${reactionSuffix}`,
             });
         }
     }
@@ -320,20 +326,29 @@ client.on(Events.MessageCreate, async (msg: Message) => {
             `\n## Skills\nAvailable skills: ${skills.map((s) => `\`${s}\``).join(", ")}\nTo use a skill, call the use_skill tool with the skill name. It will return the skill's SKILL.md instructions before you apply them.`
         );
     }
+    systemPromptParts.push(
+        `\n## Discord Context\nChannel ID: ${msg.channel.id}\nMessage IDs appear as \`[id:...]\` in history entries. Reactions are shown at the end like \`(reactions: 😄×2)\`. Use the \`react_message\` tool with \`channel_id\` and \`message_id\` to react.`
+    );
     if (useToml) {
         systemPromptParts.push("\n## TOML Editing\nIn your shell, you have a convenient CLI for easy editing. You can use `toml <file> <key> push <value>` to push a value to a key, or `toml <file> <key> remove <value>` to remove a value. If the key or file doesn't exist, it will be created for you.\nThis is the primary way you should be managing memory. You can for example use `toml memory.toml notes push \"<something you want to remember>\"` to add a note to your memory, which will persist across sessions.");
     }
     const systemPrompt = systemPromptParts.join("\n") || "You are a helpful assistant.";
 
     const userText = msg.content.replace(/<@!?\d+>/g, "").trim();
+    const idPrefix = `[id:${msg.id}] `;
     const visionEnabled = getVisionEnabled(config);
     const imageAttachments = visionEnabled
         ? Array.from(msg.attachments.values()).filter((a) => (a.contentType || "").startsWith("image/"))
         : [];
 
+    const currentReactionList = Array.from(msg.reactions.cache.values())
+        .map((r) => `${r.emoji.name}${r.count && r.count > 1 ? `×${r.count}` : ""}`)
+        .join(" ");
+    const currentReactionSuffix = currentReactionList ? ` (reactions: ${currentReactionList})` : "";
+
     if (visionEnabled && imageAttachments.length > 0) {
         const parts: any[] = [];
-        const text = `[${msg.author.displayName}]: ${userText || "(image)"}`;
+        const text = `${idPrefix}[${msg.author.displayName}]: ${userText || "(image)"}${currentReactionSuffix}`;
         parts.push({ type: "text", text });
         for (const img of imageAttachments) {
             parts.push({ type: "image_url", image_url: { url: img.url } });
@@ -342,7 +357,7 @@ client.on(Events.MessageCreate, async (msg: Message) => {
     } else {
         history.push({
             role: "user",
-            content: `[${msg.author.displayName}]: ${userText || "(empty message)"}`,
+            content: `${idPrefix}[${msg.author.displayName}]: ${userText || "(empty message)"}${currentReactionSuffix}`,
         });
     }
 

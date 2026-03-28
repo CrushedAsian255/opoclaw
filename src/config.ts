@@ -206,6 +206,7 @@ export function getTools(config: OpoclawConfig): any[] {
         TOOLS.use_skill,
         TOOLS.list_skills,
         TOOLS.deep_research,
+        TOOLS.react_message,
         TOOLS.shell,
     ];
 

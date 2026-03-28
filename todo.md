@@ -5,7 +5,6 @@
 - [x] unit tests
 - [x] add IRC channel and the framework for further channel expansion
     - [x] the Discord channel should be moved to a channels folder, in which the IRC channel will also be placed
-- [ ] make opoclaw docs
 - [x] fix search tool
 - [x] vision support
 - [x] windows fixes
@@ -17,3 +16,4 @@
     but on Linux & Macos, all tests pass
 - [x] less verbose tool messages
 - [x] Deep Research
+- [x] reactions
