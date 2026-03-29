@@ -560,18 +560,18 @@ export async function handleToolCall(
     switch (name) {
         case "read_file": {
             if (!args.path) throw new Error("Missing 'path' argument for read_file.");
-            const content = await readFileAsync(args.path);
+            const content = await readFileAsync(args.path, config.mounts);
             return content;
         }
         case "edit_file": {
             if (!args.path) throw new Error("Missing 'path' argument for edit_file.");
             if (args.content === undefined)
                 throw new Error("Missing 'content' argument for edit_file.");
-            await editFile(args.path, args.content);
+            await editFile(args.path, args.content, config.mounts);
             return `Successfully wrote ${args.content.length} characters to "${args.path}".`;
         }
         case "list_files": {
-            const files = await listFiles();
+            const files = await listFiles(config.mounts);
             return files.length > 0
                 ? files.map((f) => `• ${f}`).join("\n")
                 : "(workspace is empty)";
@@ -579,7 +579,7 @@ export async function handleToolCall(
         case "send_file": {
             if (!args.path) throw new Error("Missing 'path' argument for send_file.");
             // Validate file exists
-            getFilePath(args.path);
+            getFilePath(args.path, config.mounts);
             // Queue file for sending after response
             pendingFileSend = { path: args.path, caption: args.caption || "" };
             return `File "${args.path}" queued for sending.`;

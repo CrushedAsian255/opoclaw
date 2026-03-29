@@ -573,7 +573,7 @@ ${responseText}`;
                 // Attach file to first message if pending
                 if (pendingFileSend && !fileSent) {
                     try {
-                        const filePath = getFilePath(pendingFileSend.path);
+                        const filePath = getFilePath(pendingFileSend.path, config.mounts);
                         const attachment = new AttachmentBuilder(filePath, {
                             name: pendingFileSend.path.split("/").pop() || "file",
                         });
@@ -601,7 +601,7 @@ ${responseText}`;
         // Send remaining file if not yet sent (e.g., no text response)
         if (pendingFileSend && !fileSent) {
             try {
-                const filePath = getFilePath(pendingFileSend.path);
+                const filePath = getFilePath(pendingFileSend.path, config.mounts);
                 const attachment = new AttachmentBuilder(filePath, {
                     name: pendingFileSend.path.split("/").pop() || "file",
                 });

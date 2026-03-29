@@ -159,6 +159,7 @@ export interface OpoclawConfig {
     exposed_commands?: string[];
     enable_web_fetch?: boolean;
     less_verbose_tools?: boolean;
+    mounts?: Record<string, string>;
 }
 
 export function loadConfig(): OpoclawConfig {
