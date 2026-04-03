@@ -233,6 +233,18 @@ async function main() {
     const basicToolsAns = await ask("Enable read_file, edit_file, list_files tools? (sandboxed)\nIf disabled, the agent will still be able to use the shell to manipulate files. (Y/n): ");
     const basicTools = basicToolsAns.toLowerCase() === "y";
 
+    // ── Tavily Search ──────────────────────────────────────────────────────
+
+    const useTavilyAns = await ask("Use Tavily for web search instead of DuckDuckGo? (y/N): ");
+    const useTavily = useTavilyAns.toLowerCase() === "y";
+    let tavilyApiKey = "";
+    if (useTavily) {
+        tavilyApiKey = await ask("Tavily API key (tvly-...): ");
+        if (!tavilyApiKey) {
+            console.log(`${YELLOW}No Tavily key provided — falling back to DuckDuckGo.${RESET}`);
+        }
+    }
+
     // ── Write config.toml ──────────────────────────────────────────────────
 
     header("Writing config");
@@ -277,6 +289,11 @@ async function main() {
                 toml += 'max_tokens = ' + customMaxTokens + '\n';
             }
         }
+    }
+
+    if (useTavily && tavilyApiKey) {
+        toml += `search_provider = "tavily"\n`;
+        toml += `tavily_api_key = "${tavilyApiKey}"\n`;
     }
 
     writeFileSync(CONFIG_FILE, toml);

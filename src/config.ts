@@ -160,6 +160,8 @@ export interface OpoclawConfig {
     enable_web_fetch?: boolean;
     less_verbose_tools?: boolean;
     mounts?: Record<string, string>;
+    search_provider?: "duckduckgo" | "tavily";
+    tavily_api_key?: string;
 }
 
 export function loadConfig(): OpoclawConfig {

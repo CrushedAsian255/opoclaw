@@ -142,7 +142,7 @@ export const TOOLS: { [id: string]: any } = {
         function: {
             name: "search",
             description:
-                "Search the web using DuckDuckGo (no API key required) and return top results.",
+                "Search the web and return top results.",
             parameters: {
                 type: "object",
                 properties: {
@@ -494,6 +494,8 @@ import { mkdir, readdir, readFile, writeFile, rm, stat as fsStat } from "fs/prom
 import { getConfigPath, getExposedCommands, getSemanticSearchEnabled, parseTOML, toTOML, type OpoclawConfig } from "./config.ts";
 import { listSkills, readSkill } from "./skills.ts";
 import { DuckDuckGoSearch } from "./search/duckduckgo.ts";
+import { TavilySearch } from "./search/tavily.ts";
+import type { SearchResult } from "./search/base.ts";
 const toReal = (rel: string) => path.join(WORKSPACE_DIR, rel);
 
 shell.mount("/home/", {
@@ -539,9 +541,7 @@ function stripHtml(input: string): string {
     return input.replace(/<[^>]*>/g, "").trim();
 }
 
-async function duckDuckGoSearch(query: string, count = 5): Promise<string> {
-    const provider = new DuckDuckGoSearch();
-    const results = await provider.search(query, count);
+function formatSearchResults(results: SearchResult[], count: number): string {
     if (!results.length) return "(no results)";
     return results
         .slice(0, count)
@@ -549,12 +549,40 @@ async function duckDuckGoSearch(query: string, count = 5): Promise<string> {
         .join("\n\n");
 }
 
-async function fetchWithTimeout(url: string, timeoutMs = 5000): Promise<Response> {
+async function tavilyExtract(url: string, apiKey: string, timeoutMs = 15000): Promise<string> {
+    const res = await fetchWithTimeout("https://api.tavily.com/extract", timeoutMs, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ urls: url, extract_depth: "basic", format: "markdown" }),
+    });
+    if (!res.ok) throw new Error(`tavily extract failed (${res.status})`);
+    const data: any = await res.json();
+    const result = data.results?.[0];
+    if (!result) {
+        const failed = data.failed_results?.[0];
+        throw new Error(failed?.error ?? "tavily extract returned no results");
+    }
+    return result.raw_content as string;
+}
+
+async function webSearch(query: string, count = 5, config: OpoclawConfig): Promise<string> {
+    if (config.search_provider === "tavily") {
+        if (!config.tavily_api_key) return "Error: Tavily is selected as search provider but no tavily_api_key is set in config.";
+        return formatSearchResults(await new TavilySearch(config.tavily_api_key).search(query, count), count);
+    }
+    return formatSearchResults(await new DuckDuckGoSearch().search(query, count), count);
+}
+
+async function fetchWithTimeout(url: string, timeoutMs = 5000, init?: RequestInit): Promise<Response> {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
     try {
         return await fetch(url, {
             headers: { "User-Agent": "opoclaw-bot/1.0" },
+            ...init,
             signal: controller.signal,
         });
     } finally {
@@ -710,7 +738,7 @@ export async function handleToolCall(
             const countRaw = Number(args.count ?? 5);
             const count = Number.isFinite(countRaw) ? Math.min(Math.max(1, countRaw), 10) : 5;
             const q = String(args.query);
-            return await duckDuckGoSearch(q, count);
+            return await webSearch(q, count, config);
         }
         case "use_skill": {
             if (!args.name) throw new Error("Missing 'name' argument for use_skill.");
@@ -722,10 +750,14 @@ export async function handleToolCall(
         }
         case "web_fetch": {
             if (!args.url) throw new Error("Missing 'url' argument for web_fetch.");
-            const res = await fetch(String(args.url), { headers: { "User-Agent": "opoclaw-bot/1.0" } });
+            const url = String(args.url);
+            if (config.search_provider === "tavily") {
+                if (!config.tavily_api_key) return "Error: Tavily is selected as search provider but no tavily_api_key is set in config.";
+                return await tavilyExtract(url, config.tavily_api_key);
+            }
+            const res = await fetch(url, { headers: { "User-Agent": "opoclaw-bot/1.0" } });
             if (!res.ok) throw new Error(`web_fetch failed (${res.status})`);
-            const text = await res.text();
-            return text;
+            return await res.text();
         }
         case "react_message": {
             const channelId = String(args.channel_id || "");
