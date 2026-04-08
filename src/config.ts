@@ -162,6 +162,7 @@ export interface OpoclawConfig {
     mounts?: Record<string, string>;
     search_provider?: "duckduckgo" | "tavily";
     tavily_api_key?: string;
+    show_update_notification?: boolean;
 }
 
 export function loadConfig(): OpoclawConfig {
