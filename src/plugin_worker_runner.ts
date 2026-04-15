@@ -20,9 +20,6 @@ async function main() {
         registerTool: (descriptor: any) => {
             (globalThis as any).postMessage({ type: 'registerTool', descriptor });
         },
-        registerSkill: (meta: any) => {
-            (globalThis as any).postMessage({ type: 'registerSkill', meta });
-        },
         log: (...args: any[]) => {
             (globalThis as any).postMessage({ type: 'log', args });
         },

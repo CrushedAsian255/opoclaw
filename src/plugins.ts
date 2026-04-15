@@ -3,7 +3,6 @@ import { readdir, stat, readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { getPluginDir, pluginsEnabled, pluginUseWorkers } from "./config.ts";
 import { registerTool, unregisterTool } from "./tools.ts";
-import { registerSkill, unregisterSkill } from "./skills.ts";
 import { readFileAsync, editFile } from "./workspace.ts";
 
 type PluginManifest = {
@@ -69,8 +68,6 @@ export async function loadPlugins(config: any): Promise<void> {
                                 const res = await p;
                                 return String(res ?? "");
                             }, manifest.name);
-                        } else if (m.type === 'registerSkill') {
-                            try { registerSkill(m.meta); } catch (e) { console.warn(e); }
                         } else if (m.type === 'invokeResult') {
                             const callId = m.callId;
                             const entry = pending.get(callId);
@@ -137,8 +134,6 @@ function buildContextForPlugin(manifest: PluginManifest, root: string, config: a
             registerTool(id, descriptor, async (args: any, cfg: any) => await handler(args), pluginId);
         },
         unregisterTool: (id: string) => unregisterTool(id),
-        registerSkill: (meta: any) => registerSkill(meta),
-        unregisterSkill: (name: string) => unregisterSkill(name),
         readFile: async (rel: string) => {
             // permission check
             const fsPerms = manifest.permissions?.fileSystem ?? [];
@@ -199,7 +194,7 @@ export async function unloadPlugin(name: string): Promise<void> {
     } catch (err) {
         console.warn(`Error during plugin ${name} deactivate: ${err}`);
     }
-    // best-effort cleanup: remove any registered tools/skills by this plugin
+    // best-effort cleanup: remove any registered tools by this plugin
     // (We don't track them individually here; plugins should unregister themselves in deactivate)
     PLUGINS.delete(name);
 }
