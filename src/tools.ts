@@ -25,7 +25,7 @@ export const TOOLS: { [id: string]: any } = {
         function: {
             name: "edit_file",
             description:
-                "Overwrite the contents of an existing file in the workspace. You cannot create new files or delete files — only edit files that already exist.",
+                "Overwrite the contents of an existing file in the workspace. If the file does not exist, it will be created.",
             parameters: {
                 type: "object",
                 properties: {
