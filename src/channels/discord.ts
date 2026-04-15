@@ -791,15 +791,17 @@ export async function startDiscord(): Promise<void> {
                     if (prior !== undefined) {
                         if (prior === idx) {
                             state.voters.delete(interaction.user.id);
-                            state.counts[prior] = Math.max(0, state.counts[prior] - 1);
+                            const prev = state.counts[prior] ?? 0;
+                            state.counts[prior] = Math.max(0, prev - 1);
                         } else {
-                            state.counts[prior] = Math.max(0, state.counts[prior] - 1);
+                            const prev = state.counts[prior] ?? 0;
+                            state.counts[prior] = Math.max(0, prev - 1);
                             state.voters.set(interaction.user.id, idx);
-                            state.counts[idx] += 1;
+                            state.counts[idx] = (state.counts[idx] ?? 0) + 1;
                         }
                     } else {
                         state.voters.set(interaction.user.id, idx);
-                        state.counts[idx] += 1;
+                        state.counts[idx] = (state.counts[idx] ?? 0) + 1;
                     }
 
                     state.updatedAt = Date.now();
