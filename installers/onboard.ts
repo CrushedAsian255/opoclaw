@@ -307,6 +307,13 @@ async function main() {
         mkdirSync(WORKSPACE_DIR, { recursive: true });
     }
 
+    // Create subdirectories
+    mkdirSync(resolve(WORKSPACE_DIR, "config"), { recursive: true });
+    mkdirSync(resolve(WORKSPACE_DIR, "memory", "sessions"), { recursive: true });
+    mkdirSync(resolve(WORKSPACE_DIR, "knowledge"), { recursive: true });
+    mkdirSync(resolve(WORKSPACE_DIR, "skills"), { recursive: true });
+    ok("Created subdirectory structure: config/, memory/sessions/, knowledge/, skills/");
+
     function getFileContent(filename: string, content: string): string {
         return content.replaceAll("<filename>", filename);
     }
@@ -326,12 +333,12 @@ async function main() {
     const files = enableToml ? filesToml : filesMd;
 
     for (const [name, content] of Object.entries(files)) {
-        const path = resolve(WORKSPACE_DIR, name);
+        const path = resolve(WORKSPACE_DIR, "config", name);
         if (existsSync(path)) {
             info(`Skipped ${name} (already exists)`);
         } else {
             writeFileSync(path, getFileContent(name, content));
-            ok(`Created ${name}`);
+            ok(`Created config/${name}`);
         }
     }
 
@@ -342,7 +349,7 @@ async function main() {
     console.log(`${GREEN}opoclaw is ready.${RESET}\n`);
     console.log("Next steps:");
     console.log(`  1. Review ${CONFIG_FILE}`);
-    console.log(`  2. Fill in workspace/SOUL.md and workspace/IDENTITY.md`);
+    console.log(`  2. Fill in workspace/config/SOUL.md and workspace/config/IDENTITY.md`);
     console.log(`  3. Run: bun run src/index.ts`);
     console.log(`  4. Mention your bot in Discord to test\n`);
 }
