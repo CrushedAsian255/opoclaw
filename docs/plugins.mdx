@@ -30,7 +30,7 @@ Optionally enable worker sandboxing:
 plugin_use_workers = true
 ```
 
-plugin_use_workers attempts t
+`plugin_use_workers` attempts to isolate plugin execution in a Worker process for improved security and stability.
 
 ## Manifest (plugin.json)
 
@@ -95,7 +95,44 @@ export async function deactivate() {
 }
 ```
 
-If `plugin_use_workers` is enabled, plugins run inside a worker process and communicate with the host over a small RPC. The worker must export an `activate` function and can post `registerTool` messages to the host. See `src/plugin_worker_runner.ts`.
+## Worker-based execution
+
+When `plugin_use_workers = true`, each plugin runs in its own isolated Worker process:
+
+- **Isolation**: Plugins run in a separate Node.js worker, preventing crashes from affecting the main opoclaw process.
+- **Communication**: Host and worker communicate via `postMessage` RPC — the plugin posts messages to the host, not direct function calls.
+- **Activation**: Worker loads the plugin entry file and calls `await activate(context)` where `context` is a proxy object (not the direct API).
+- **Tool registration**: Plugins post `{ type: 'registerTool', ... }` messages instead of calling `registerTool()` directly.
+- **Shutdown**: When a plugin is unloaded or opoclaw shuts down, the worker is terminated.
+
+Example worker-based plugin:
+
+```ts
+// plugin.ts (runs inside worker)
+export async function activate(context) {
+  // context.log becomes postMessage({ type: 'log', args: [...] })
+  context.log('Worker activating');
+
+  // Register tools via message passing
+  self.postMessage({
+    type: 'registerTool',
+    descriptor: {
+      function: {
+        name: 'echo',
+        description: 'Echo text',
+        parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] }
+      }
+    },
+    handler: async (args) => `echo:${args.text}`
+  });
+}
+```
+
+Key differences from non-worker mode:
+- No direct API access — use `self.postMessage()` to communicate with host
+- `context` is a limited proxy (read-only config, manifest, etc.)
+- Tool handlers run inside worker, still return strings
+- Errors in worker don't crash the main process
 
 ## Security & Permissions
 

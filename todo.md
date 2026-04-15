@@ -17,3 +17,5 @@
 - [x] less verbose tool messages
 - [x] Deep Research
 - [x] reactions
+- [ ] finish plugins
+- [ ] rewrite plugin documentation
