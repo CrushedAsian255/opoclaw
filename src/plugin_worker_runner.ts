@@ -6,29 +6,70 @@ if (!entry) {
     throw new Error("Plugin worker requires ?entry=file:///... query param");
 }
 
+const config = JSON.parse(params.get('config') || '{}');
+const root = params.get('root') || '';
+const manifest = JSON.parse(params.get('manifest') || '{}');
+
 async function main() {
     let mod: any = null;
     try {
-        mod = await import(entry);
+        mod = await import(entry as string);
     } catch (err) {
         (globalThis as any).postMessage({ type: 'error', message: String(err) });
         throw err;
     }
 
     const ctx = {
-        manifest: {},
+        config,
+        manifest,
+        root,
         registerTool: (descriptor: any) => {
             (globalThis as any).postMessage({ type: 'registerTool', descriptor });
+        },
+        unregisterTool: (id: any) => {
+            (globalThis as any).postMessage({ type: 'unregisterTool', id });
+        },
+        readFile: async (rel: string) => {
+            (globalThis as any).postMessage({ type: 'readFile', rel });
+            return new Promise((resolve) => {
+                (globalThis as any).onmessage = (ev: any) => {
+                    if (ev.data?.type === 'readFileResult') resolve(ev.data.content);
+                };
+            });
+        },
+        editFile: async (rel: string, content: string) => {
+            (globalThis as any).postMessage({ type: 'editFile', rel, content });
+            return new Promise((resolve) => {
+                (globalThis as any).onmessage = (ev: any) => {
+                    if (ev.data?.type === 'editFileResult') resolve(ev.data.ok);
+                };
+            });
         },
         log: (...args: any[]) => {
             (globalThis as any).postMessage({ type: 'log', args });
         },
+        checkPermission: (p: string) => {
+            const permsAny: Record<string, any> = (manifest.permissions as Record<string, any>) || {};
+            if (!p) return false;
+            const parts = String(p).split(":", 2);
+            if (parts.length === 2) {
+                const [k, v] = parts;
+                const key = String(k);
+                const val = permsAny[key];
+                if (!val) return false;
+                if (Array.isArray(val)) return (val as any[]).includes(v) || (val as any[]).includes("*");
+                return Boolean(val);
+            }
+            return Boolean(permsAny[p] ?? permsAny["all"] ?? false);
+        },
+        getMounts: () => (config.mounts || {}),
     } as any;
 
-    // Listen for invoke requests from the parent
+    // Listen for messages from the parent (invokeTool, deactivate)
     (globalThis as any).onmessage = async (ev: any) => {
         const msg = ev.data;
         if (!msg || !msg.type) return;
+        
         if (msg.type === 'invokeTool') {
             const { callId, name, args } = msg;
             try {
@@ -44,14 +85,22 @@ async function main() {
             } catch (err: any) {
                 (globalThis as any).postMessage({ type: 'invokeResult', callId, error: String(err) });
             }
+        } else if (msg.type === 'deactivate' && activated && typeof mod.deactivate === 'function') {
+            try {
+                await mod.deactivate();
+            } catch (err: any) {
+                (globalThis as any).postMessage({ type: 'error', message: String(err) });
+            }
         }
     };
 
     // Activate plugin if possible
+    let activated = false;
     try {
         if (mod && typeof mod.activate === 'function') {
             await mod.activate(ctx);
         }
+        activated = true;
         (globalThis as any).postMessage({ type: 'ready' });
     } catch (err: any) {
         (globalThis as any).postMessage({ type: 'error', message: String(err) });

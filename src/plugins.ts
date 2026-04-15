@@ -43,13 +43,15 @@ export async function loadPlugins(config: any): Promise<void> {
                 try {
                     // spawn worker runner with entry param
                     const runnerUrl = new URL('./plugin_worker_runner.ts', import.meta.url).toString();
-                    const entryFileUrl = 'file://' + entryPath;
-                    const workerUrl = runnerUrl + `?entry=${encodeURIComponent(entryFileUrl)}`;
+                    const entryFileUrl = 'file:///' + entryPath.replace(/\\/g, '/');
+                    const workerUrl = runnerUrl + `?entry=${encodeURIComponent(entryFileUrl)}&config=${encodeURIComponent(JSON.stringify(config))}&root=${encodeURIComponent(root)}&manifest=${encodeURIComponent(JSON.stringify(manifest))}`;
                     const worker = new Worker(workerUrl, { type: 'module' } as any);
 
                     // RPC map for pending invokes
                     const pending: Map<string, { resolve: (v: any) => void; reject: (e: any) => void }> = new Map();
                     let callCounter = 0;
+
+                    const pluginTools: string[] = [];
 
                     worker.onmessage = (ev: any) => {
                         const m = ev.data;
@@ -60,6 +62,7 @@ export async function loadPlugins(config: any): Promise<void> {
                             const descriptor = m.descriptor;
                             const id = descriptor?.function?.name || descriptor?.id;
                             if (!id) return;
+                            pluginTools.push(id);
                             // register a handler that forwards calls to worker
                             registerTool(id, descriptor, async (args: any) => {
                                 const callId = `${Date.now()}-${++callCounter}`;
@@ -68,6 +71,13 @@ export async function loadPlugins(config: any): Promise<void> {
                                 const res = await p;
                                 return String(res ?? "");
                             }, manifest.name);
+                        } else if (m.type === 'unregisterTool') {
+                            const id = m.id;
+                            unregisterTool(id);
+                        } else if (m.type === 'readFile') {
+                            readFileAsync(m.rel, config.mounts).then(content => worker.postMessage({ type: 'readFileResult', content })).catch(err => worker.postMessage({ type: 'readFileResult', content: null }));
+                        } else if (m.type === 'editFile') {
+                            editFile(m.rel, m.content, config.mounts).then(ok => worker.postMessage({ type: 'editFileResult', ok })).catch(err => worker.postMessage({ type: 'editFileResult', ok: false }));
                         } else if (m.type === 'invokeResult') {
                             const callId = m.callId;
                             const entry = pending.get(callId);
@@ -82,6 +92,7 @@ export async function loadPlugins(config: any): Promise<void> {
                     };
 
                     PLUGINS.set(manifest.name, { manifest, module: worker as any, active: true, root });
+                    (PLUGINS.get(manifest.name) as any).tools = pluginTools;
                     console.log(`Loaded plugin (worker): ${manifest.name}`);
                 } catch (err: any) {
                     console.warn(`Failed to spawn worker for plugin ${manifest.name}: ${err}`);
@@ -90,24 +101,27 @@ export async function loadPlugins(config: any): Promise<void> {
             } else {
                 // direct import in-process
                 let mod: any = null;
+                const entryUrl = 'file:///' + entryPath.replace(/\\/g, '/');
                 try {
-                    mod = await import(entryPath);
+                    mod = await import(entryUrl);
                 } catch (err) {
                     try {
-                        // try file:// URL import (Node/Bun ESM variation)
-                        mod = await import('file://' + entryPath);
+                        // try direct import (Bun variation)
+                        mod = await import(entryPath);
                     } catch (err2) {
                         console.warn(`Failed to import plugin ${manifest.name}: ${err}`);
                         continue;
                     }
                 }
 
-                const ctx = buildContextForPlugin(manifest, root, config);
+                const pluginTools: string[] = [];
+                const ctx = buildContextForPlugin(manifest, root, config, pluginTools);
                 if (typeof mod.activate === "function") {
                     await mod.activate(ctx);
                 }
 
                 PLUGINS.set(manifest.name, { manifest, module: mod, active: true, root });
+                (PLUGINS.get(manifest.name) as any).tools = pluginTools;
                 console.log(`Loaded plugin: ${manifest.name}`);
             }
         } catch (err: any) {
@@ -116,7 +130,7 @@ export async function loadPlugins(config: any): Promise<void> {
     }
 }
 
-function buildContextForPlugin(manifest: PluginManifest, root: string, config: any) {
+function buildContextForPlugin(manifest: PluginManifest, root: string, config: any, pluginTools: string[]) {
     const pluginId = manifest.name;
 
     return {
@@ -124,13 +138,12 @@ function buildContextForPlugin(manifest: PluginManifest, root: string, config: a
         manifest,
         root,
         registerTool: (descriptor: any, handler: any) => {
-            // descriptor must include an id (function name)
             const id = descriptor?.function?.name || descriptor?.id;
             if (!id) throw new Error("Tool descriptor must include a function.name or id");
-            // Enforce permission: plugin must declare ability to register/use this tool
             const toolPerms = manifest.permissions?.tools ?? [];
             const allowed = Array.isArray(toolPerms) ? toolPerms.includes(id) || toolPerms.includes("*") : Boolean(toolPerms);
             if (!allowed) throw new Error(`Plugin ${pluginId} not permitted to register tool ${id}`);
+            pluginTools.push(id);
             registerTool(id, descriptor, async (args: any, cfg: any) => await handler(args), pluginId);
         },
         unregisterTool: (id: string) => unregisterTool(id),
@@ -188,13 +201,21 @@ export async function unloadPlugin(name: string): Promise<void> {
     const p = PLUGINS.get(name);
     if (!p) return;
     try {
-        if (p.module && typeof p.module.deactivate === "function") {
+        if (p.module && typeof p.module.postMessage === "function") {
+            p.module.postMessage({ type: 'deactivate' });
+            p.module.terminate();
+        } else if (p.module && typeof p.module.deactivate === "function") {
             await p.module.deactivate();
         }
     } catch (err) {
         console.warn(`Error during plugin ${name} deactivate: ${err}`);
     }
-    // best-effort cleanup: remove any registered tools by this plugin
-    // (We don't track them individually here; plugins should unregister themselves in deactivate)
+    // clean up registered tools by this plugin
+    const pluginTools = (p as any).tools as string[] | undefined;
+    if (pluginTools) {
+        for (const id of pluginTools) {
+            unregisterTool(id);
+        }
+    }
     PLUGINS.delete(name);
 }
