@@ -8,7 +8,7 @@ This page documents the opoclaw plugin system: manifest format, lifecycle API, e
 
 ## Overview
 
-Plugins let you extend opoclaw by registering tools (functions the assistant can call) and skills (reusable instruction files). Plugins live in the workspace `plugins/` directory and are discovered at startup when `enable_plugins` is set in `config.toml`.
+Plugins let you extend opoclaw by registering tools (functions the assistant can call). Plugins live in the workspace `plugins/` directory and are discovered at startup when `enable_plugins` is set in `config.toml`.
 
 - Manifest: `plugin.json` placed in `workspace/plugins/<plugin>/plugin.json`.
 - Entry: `entry` points to the plugin entry file (TypeScript/JavaScript) — typically `plugin.ts`.
@@ -30,6 +30,8 @@ Optionally enable worker sandboxing:
 plugin_use_workers = true
 ```
 
+plugin_use_workers attempts t
+
 ## Manifest (plugin.json)
 
 Minimal example:
@@ -39,7 +41,7 @@ Minimal example:
   "name": "example-echo-plugin",
   "version": "0.1.0",
   "entry": "plugin.ts",
-  "description": "Example plugin: registers a tool and a skill.",
+  "description": "Example plugin: registers a tool.",
   "permissions": {
     "fileSystem": ["workspace"],
     "tools": ["echo", "test_echo"]
@@ -66,8 +68,6 @@ When a plugin is activated the runtime calls `await activate(context)` where `co
 - `root`: absolute plugin folder path.
 - `registerTool(descriptor, handler)`: register a tool the model can call. `descriptor` must include `function.name` (the callable name) and parameters. `handler(args)` must return a string result.
 - `unregisterTool(id)`: unregister a previously registered tool.
-- `registerSkill({ name, content, metadata })`: register an in-memory skill available via `use_skill`.
-- `unregisterSkill(name)`: remove a plugin skill.
 - `readFile(path)`: read a workspace file (requires `fileSystem` permission).
 - `editFile(path, content)`: write a workspace file (requires `fileSystem` permission).
 - `log(...args)`: plugin logging (writes to opoclaw logs).
@@ -88,7 +88,6 @@ export async function activate(context) {
   context.registerTool({ function: { name: 'echo', description: 'Echo text', parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } } }, async (args) => {
     return `echo:${String(args.text || '')}`;
   });
-  context.registerSkill({ name: 'example-echo', content: '# Example skill' });
 }
 
 export async function deactivate() {
@@ -96,7 +95,7 @@ export async function deactivate() {
 }
 ```
 
-If `plugin_use_workers` is enabled, plugins run inside a worker process and communicate with the host over a small RPC. The worker must export an `activate` function and can post `registerTool`/`registerSkill` messages to the host. See `src/plugin_worker_runner.ts`.
+If `plugin_use_workers` is enabled, plugins run inside a worker process and communicate with the host over a small RPC. The worker must export an `activate` function and can post `registerTool` messages to the host. See `src/plugin_worker_runner.ts`.
 
 ## Security & Permissions
 
