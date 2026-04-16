@@ -17,6 +17,20 @@ export function toTOML(config: Record<string, any>): string {
     return toml.stringify(config);
 }
 
+export function formatTOMLValue(value: any): string {
+    if (value === null) return "null";
+    if (value === true) return "true";
+    if (value === false) return "false";
+    if (typeof value === "number") return String(value);
+    if (typeof value === "string") return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    if (Array.isArray(value)) return `[${value.map(formatTOMLValue).join(", ")}]`;
+    if (typeof value === "object") {
+        const entries = Object.entries(value).map(([k, v]) => `${k} = ${formatTOMLValue(v)}`);
+        return `{ ${entries.join(", ")} }`;
+    }
+    return String(value);
+}
+
 // ── Config interface ───────────────────────────────────────────────────────
 
 export interface OpoclawConfig {
