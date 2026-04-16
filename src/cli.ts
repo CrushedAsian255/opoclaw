@@ -575,6 +575,38 @@ function migrate() {
   console.log(`  Old config backed up at: ${backupPath}\n`);
 }
 
+// ── less_verbose_tools → tool_call_summaries migration ────────────────────
+
+function migrateLessVerboseTools() {
+  const tomlPath = resolve(OP_DIR, "config.toml");
+  if (!existsSync(tomlPath)) return;
+
+  const raw = readFileSync(tomlPath, "utf-8");
+  const parsed = parseTOML(raw);
+
+  const hasLessVerbose = "less_verbose_tools" in parsed;
+  if (!hasLessVerbose) {
+    return;
+  }
+
+  const value = parsed.less_verbose_tools;
+  const next: any = { ...parsed };
+  delete next.less_verbose_tools;
+
+  if (value === true) {
+    next.tool_call_summaries = "minimal";
+    info(`less_verbose_tools = true → tool_call_summaries = "minimal"`);
+  } else {
+    // false or absent: "full" is the default, so just drop the key
+    info(`less_verbose_tools = false → removed (default is "full")`);
+  }
+
+  const backupPath = tomlPath + ".bak";
+  writeFileSync(backupPath, raw);
+  writeFileSync(tomlPath, toTOML(next));
+  ok(`Migrated less_verbose_tools → tool_call_summaries. Backup at config.toml.bak`);
+}
+
 // ── CamelCase → snake_case migration ──────────────────────────────────────
 
 const CAMEL_TO_SNAKE: Record<string, string> = {
@@ -728,6 +760,7 @@ async function main() {
       migrate();
       migrateToSnakeCase();
       migrateToSectionedConfig();
+      migrateLessVerboseTools();
       break;
 
     case "onboard":
