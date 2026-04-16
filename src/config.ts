@@ -1,6 +1,7 @@
 import { resolve } from "path";
 import { existsSync, readFileSync } from "fs";
 import { TOOLS } from "./tools";
+import * as toml from "@iarna/toml";
 
 const DEFAULT_CONFIG_FILE = resolve(import.meta.dir, "../config.toml");
 
@@ -8,101 +9,12 @@ function getConfigFilePath(): string {
     return process.env.OPOCLAW_CONFIG_PATH || DEFAULT_CONFIG_FILE;
 }
 
-// ── Minimal TOML parser (for our config format) ────────────────────────────
-
 export function parseTOML(text: string): Record<string, any> {
-    const result: Record<string, any> = {};
-    const lines = text.split("\n");
-    let currentSection: Record<string, any> = result;
-    let currentKey = "";
-
-    for (const raw of lines) {
-        const line = raw.replace(/#.*$/, "").trim();
-        if (!line) continue;
-
-        // Section header: [key] or [key.subkey]
-        const sectionMatch = line.match(/^\[([A-Za-z0-9_.-]+)\]$/);
-        if (sectionMatch && sectionMatch[1]) {
-            currentKey = sectionMatch[1];
-            const parts = currentKey.split(".").filter(Boolean);
-            let cursor: Record<string, any> = result;
-            for (const part of parts) {
-                cursor[part] = cursor[part] || {};
-                cursor = cursor[part];
-            }
-            currentSection = cursor;
-            continue;
-        }
-
-        // Key = value
-        const kvMatch = line.match(/^(\w+)\s*=\s*(.+)$/);
-        if (kvMatch && kvMatch[1] && kvMatch[2]) {
-            const key = kvMatch[1];
-            const rawValue = kvMatch[2];
-            let value: any = rawValue.trim();
-
-            // String
-            if (value.startsWith('"') && value.endsWith('"')) {
-                value = value.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-            }
-            // Boolean
-            else if (value === "true") value = true;
-            else if (value === "false") value = false;
-            // Number
-            else if (/^-?\d+$/.test(value)) value = parseInt(value, 10);
-            else if (/^-?\d+\.\d+$/.test(value)) value = parseFloat(value);
-
-            currentSection[key!] = value;
-        }
-    }
-
-    return result;
+    return toml.parse(text) as Record<string, any>;
 }
 
 export function toTOML(config: Record<string, any>): string {
-    let out = "";
-    const simple: Record<string, any> = {};
-    const sections: Record<string, Record<string, any>> = {};
-
-    function ensureSection(name: string): Record<string, any> {
-        if (!sections[name]) sections[name] = {};
-        return sections[name]!;
-    }
-
-    function walk(obj: Record<string, any>, prefix = ""): void {
-        for (const [key, value] of Object.entries(obj)) {
-            const isObj =
-                typeof value === "object" && value !== null && !Array.isArray(value);
-            if (isObj) {
-                const nextPrefix = prefix ? `${prefix}.${key}` : key;
-                walk(value, nextPrefix);
-            } else {
-                if (!prefix) {
-                    simple[key] = value;
-                } else {
-                    ensureSection(prefix)[key] = value;
-                }
-            }
-        }
-    }
-
-    walk(config);
-
-    // Simple keys first
-    for (const [key, value] of Object.entries(simple)) {
-        out += `${key} = ${formatTOMLValue(value)}\n`;
-    }
-
-    // Sections (sorted for stability)
-    for (const section of Object.keys(sections).sort()) {
-        const values = sections[section]!;
-        out += `\n[${section}]\n`;
-        for (const [key, value] of Object.entries(values)) {
-            out += `${key} = ${formatTOMLValue(value)}\n`;
-        }
-    }
-
-    return out;
+    return toml.stringify(config);
 }
 
 export function formatTOMLValue(value: any): string {
@@ -152,6 +64,7 @@ export interface OpoclawConfig {
     reasoning_summary?: boolean;
     reasoning_summary_model?: string;
     basic_tools?: boolean;
+    advanced_tools?: boolean;
     ollama_semantic_search?: boolean;
     use_toml_files?: boolean;
     authorized_user_id?: string;
@@ -162,6 +75,11 @@ export interface OpoclawConfig {
     mounts?: Record<string, string>;
     search_provider?: "duckduckgo" | "tavily";
     tavily_api_key?: string;
+    // Plugin settings
+    enable_plugins?: boolean;
+    plugin_dir?: string;
+    // Whether to attempt running plugins in isolated workers (not fully implemented)
+    plugin_use_workers?: boolean;
     show_update_notification?: boolean;
 }
 
@@ -225,6 +143,10 @@ export function getTools(config: OpoclawConfig): any[] {
         tools.push(TOOLS.read_file, TOOLS.edit_file, TOOLS.list_files);
     }
 
+    if (config.advanced_tools ?? false) {
+        tools.push(TOOLS.mkdir, TOOLS.rm, TOOLS.mv, TOOLS.cp);
+    }
+
     return tools;
 }
 
@@ -249,4 +171,17 @@ export function getVisionEnabled(config: OpoclawConfig): boolean {
 
 export function getExposedCommands(config: OpoclawConfig): string[] {
     return config.exposed_commands || [];
+}
+
+export function pluginsEnabled(config: OpoclawConfig): boolean {
+    return config.enable_plugins ?? false;
+}
+
+export function getPluginDir(config: OpoclawConfig): string {
+    // If config provides plugin_dir use it, otherwise default to workspace/plugins relative to repo
+    return config.plugin_dir || resolve(import.meta.dir, "../workspace/plugins");
+}
+
+export function pluginUseWorkers(config: OpoclawConfig): boolean {
+    return config.plugin_use_workers ?? false;
 }

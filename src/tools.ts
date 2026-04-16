@@ -1,4 +1,4 @@
-import { readFileAsync, getFilePath, editFile, listFiles, WORKSPACE_DIR } from "./workspace.ts";
+import { readFileAsync, getFilePath, editFile, listFiles, WORKSPACE_DIR, mkdirPath, removePath, movePath, copyPath } from "./workspace.ts";
 import { Ollama } from "ollama";
 
 export const TOOLS: { [id: string]: any } = {
@@ -25,7 +25,7 @@ export const TOOLS: { [id: string]: any } = {
         function: {
             name: "edit_file",
             description:
-                "Overwrite the contents of an existing file in the workspace. You cannot create new files or delete files — only edit files that already exist.",
+                "Overwrite the contents of an existing file in the workspace. If the file does not exist, it will be created.",
             parameters: {
                 type: "object",
                 properties: {
@@ -224,6 +224,66 @@ export const TOOLS: { [id: string]: any } = {
             },
         },
     },
+    mkdir: {
+        type: "function",
+        function: {
+            name: "mkdir",
+            description: "Create a directory inside the workspace or a mounted path.",
+            parameters: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Relative path to create." },
+                },
+                required: ["path"],
+            },
+        },
+    },
+    rm: {
+        type: "function",
+        function: {
+            name: "rm",
+            description: "Remove a file or directory inside the workspace or a mounted path.",
+            parameters: {
+                type: "object",
+                properties: {
+                    path: { type: "string", description: "Relative path to remove." },
+                    recursive: { type: "boolean", description: "Remove directories recursively." },
+                },
+                required: ["path"],
+            },
+        },
+    },
+    mv: {
+        type: "function",
+        function: {
+            name: "mv",
+            description: "Move/rename a file or directory within the workspace or between mounts.",
+            parameters: {
+                type: "object",
+                properties: {
+                    src: { type: "string", description: "Source relative path." },
+                    dest: { type: "string", description: "Destination relative path." },
+                },
+                required: ["src", "dest"],
+            },
+        },
+    },
+    cp: {
+        type: "function",
+        function: {
+            name: "cp",
+            description: "Copy a file or directory within the workspace or between mounts.",
+            parameters: {
+                type: "object",
+                properties: {
+                    src: { type: "string", description: "Source relative path." },
+                    dest: { type: "string", description: "Destination relative path." },
+                    recursive: { type: "boolean", description: "Copy directories recursively." },
+                },
+                required: ["src", "dest"],
+            },
+        },
+    },
     react_message: {
         type: "function",
         function: {
@@ -348,6 +408,23 @@ export const TOOLS: { [id: string]: any } = {
         },
     }
 } as const;
+
+// Plugin tool registry: handlers provided by plugins at runtime
+const PLUGIN_TOOL_HANDLERS: Map<string, { descriptor: any; handler: (args: Record<string, any>, config: any) => Promise<string>; pluginId?: string }> = new Map();
+
+export function registerTool(id: string, descriptor: any, handler: (args: Record<string, any>, config: any) => Promise<string>, pluginId?: string) {
+    if (!id || !descriptor || !handler) throw new Error('Invalid tool registration');
+    // Register in the main TOOLS map so the model can see it
+    try {
+        (TOOLS as any)[id] = descriptor;
+    } catch {}
+    PLUGIN_TOOL_HANDLERS.set(id, { descriptor, handler, pluginId });
+}
+
+export function unregisterTool(id: string) {
+    PLUGIN_TOOL_HANDLERS.delete(id);
+    try { delete (TOOLS as any)[id]; } catch {}
+}
 
 const CACHE_DIR = path.resolve(import.meta.dir, "../cache/embeddings");
 const SIMILARITY_THRESHOLD = 0.65;
@@ -716,6 +793,26 @@ export async function handleToolCall(
             if (!res.ok) throw new Error(`web_fetch failed (${res.status})`);
             return await res.text();
         }
+        case "mkdir": {
+            if (!args.path) throw new Error("Missing 'path' argument for mkdir.");
+            return mkdirPath(String(args.path), config.mounts);
+        }
+        case "rm": {
+            if (!args.path) throw new Error("Missing 'path' argument for rm.");
+            const recursive = String(args.recursive) === "true" || String(args.recursive) === "1";
+            return removePath(String(args.path), recursive, config.mounts);
+        }
+        case "mv": {
+            if (!args.src) throw new Error("Missing 'src' argument for mv.");
+            if (!args.dest) throw new Error("Missing 'dest' argument for mv.");
+            return movePath(String(args.src), String(args.dest), config.mounts);
+        }
+        case "cp": {
+            if (!args.src) throw new Error("Missing 'src' argument for cp.");
+            if (!args.dest) throw new Error("Missing 'dest' argument for cp.");
+            const recursive = String(args.recursive) === "true" || String(args.recursive) === "1";
+            return copyPath(String(args.src), String(args.dest), recursive, config.mounts);
+        }
         case "react_message": {
             const channelId = String(args.channel_id || "");
             const messageId = String(args.message_id || "");
@@ -817,7 +914,17 @@ export async function handleToolCall(
                     : cwd;
             return output.trim() + `\n(Current directory: ${display})`;
         }
-        default:
+        default: {
+            const ph = PLUGIN_TOOL_HANDLERS.get(name);
+            if (ph && ph.handler) {
+                try {
+                    // plugin handler may expect parsed args
+                    return await ph.handler(args, config);
+                } catch (e: any) {
+                    throw new Error(`Plugin tool error: ${e?.message || e}`);
+                }
+            }
             throw new Error(`Unknown tool: ${name}`);
+        }
     }
 }

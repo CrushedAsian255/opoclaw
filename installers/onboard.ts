@@ -303,6 +303,10 @@ async function main() {
         toml += `tavily_api_key = "${tavilyApiKey}"\n`;
     }
 
+    // Plugin defaults
+    toml += `enable_plugins = false\n`;
+    toml += `plugin_dir = "workspace/plugins"\n`;
+
     writeFileSync(CONFIG_FILE, toml);
     ok(`Config written to ${CONFIG_FILE}`);
 
@@ -313,6 +317,12 @@ async function main() {
     if (!existsSync(WORKSPACE_DIR)) {
         mkdirSync(WORKSPACE_DIR, { recursive: true });
     }
+
+    // Create subdirectories
+    mkdirSync(resolve(WORKSPACE_DIR, "memory", "sessions"), { recursive: true });
+    mkdirSync(resolve(WORKSPACE_DIR, "skills"), { recursive: true });
+    mkdirSync(resolve(WORKSPACE_DIR, "plugins"), { recursive: true });
+    ok("Created subdirectory structure: memory/sessions/, skills/, plugins/");
 
     function getFileContent(filename: string, content: string): string {
         return content.replaceAll("<filename>", filename);
@@ -340,6 +350,36 @@ async function main() {
             writeFileSync(path, getFileContent(name, content));
             ok(`Created ${name}`);
         }
+    }
+
+    // Create example plugin scaffold
+    const exampleDir = resolve(WORKSPACE_DIR, "plugins", "example-echo-plugin");
+    if (!existsSync(exampleDir)) {
+        mkdirSync(exampleDir, { recursive: true });
+        const manifest = {
+            name: "example-echo-plugin",
+            version: "0.1.0",
+            entry: "plugin.ts",
+            description: "Example plugin: registers one tool 'echo' and a simple skill.",
+            permissions: { fileSystem: ["workspace"], tools: ["read_file"] },
+        };
+        writeFileSync(resolve(exampleDir, "plugin.json"), JSON.stringify(manifest, null, 2));
+        const pluginTs = `export async function activate(context) {
+    context.log('Activating example-echo-plugin');
+    context.registerTool({ id: 'echo', function: { name: 'echo', description: 'Echo input text', parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } } }, async (args) => {
+        return String(args.text || '');
+    });
+    context.registerSkill({ name: 'example-echo', content: '# Example Echo Skill\nUse this to echo.' });
+}
+
+export async function deactivate() {
+    // cleanup if needed
+}
+`;
+        writeFileSync(resolve(exampleDir, "plugin.ts"), pluginTs);
+        ok('Created example plugin scaffold in workspace/plugins/example-echo-plugin');
+    } else {
+        info('Example plugin scaffold already exists — skipped');
     }
 
     // ── Done ───────────────────────────────────────────────────────────────

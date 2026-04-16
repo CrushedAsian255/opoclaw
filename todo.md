@@ -17,3 +17,20 @@
 - [x] less verbose tool messages
 - [x] Deep Research
 - [x] reactions
+- [x] finish plugins
+- [ ] add plugin tests
+- [ ] Add actual documentation to docs/ and rewrite the plugin documentation file
+- [ ] Update installers to support installation in current directory or user-provided4
+- [ ] Reduce `any` type usage (tools.ts, agent.ts, plugins.ts)
+- [x] Replace custom TOML parser with @std/toml or similar
+- [ ] Add config validation at load time
+- [ ] Fix unused error variables in catch blocks
+- [ ] Review path handling across workspace operations
+- [ ] Implement rate limiting for tool calls and API requests
+- [ ] Add plugin worker isolation (currently marked as "not fully implemented")
+- [ ] Complete IRC channel feature parity with Discord
+- [ ] Add API response caching
+- [ ] Make semantic search embedding model configurable
+- [ ] Expand test coverage beyond unit tests
+- [ ] Add API documentation for internal interfaces
+- [ ] Resolve TypeScript as devDependency instead of peerDependency
