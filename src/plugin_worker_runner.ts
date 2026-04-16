@@ -10,6 +10,8 @@ const config = JSON.parse(params.get('config') || '{}');
 const root = params.get('root') || '';
 const manifest = JSON.parse(params.get('manifest') || '{}');
 
+const pendingPromises: Map<string, { resolve: (v: any) => void; reject: (e: any) => void }> = new Map();
+
 async function main() {
     let mod: any = null;
     try {
@@ -29,20 +31,18 @@ async function main() {
         unregisterTool: (id: any) => {
             (globalThis as any).postMessage({ type: 'unregisterTool', id });
         },
-        readFile: async (rel: string) => {
-            (globalThis as any).postMessage({ type: 'readFile', rel });
-            return new Promise((resolve) => {
-                (globalThis as any).onmessage = (ev: any) => {
-                    if (ev.data?.type === 'readFileResult') resolve(ev.data.content);
-                };
+        readFile: async (rel: string): Promise<string | null> => {
+            const callId = crypto.randomUUID();
+            (globalThis as any).postMessage({ type: 'readFile', callId, rel });
+            return new Promise((resolve, reject) => {
+                pendingPromises.set(callId, { resolve: (v: any) => resolve(v), reject });
             });
         },
-        editFile: async (rel: string, content: string) => {
-            (globalThis as any).postMessage({ type: 'editFile', rel, content });
-            return new Promise((resolve) => {
-                (globalThis as any).onmessage = (ev: any) => {
-                    if (ev.data?.type === 'editFileResult') resolve(ev.data.ok);
-                };
+        editFile: async (rel: string, content: string): Promise<boolean> => {
+            const callId = crypto.randomUUID();
+            (globalThis as any).postMessage({ type: 'editFile', callId, rel, content });
+            return new Promise((resolve, reject) => {
+                pendingPromises.set(callId, { resolve: (v: any) => resolve(v), reject });
             });
         },
         log: (...args: any[]) => {
@@ -65,12 +65,23 @@ async function main() {
         getMounts: () => (config.mounts || {}),
     } as any;
 
-    // Listen for messages from the parent (invokeTool, deactivate)
     (globalThis as any).onmessage = async (ev: any) => {
         const msg = ev.data;
         if (!msg || !msg.type) return;
-        
-        if (msg.type === 'invokeTool') {
+
+        if (msg.type === 'readFileResult') {
+            const p = pendingPromises.get(msg.callId);
+            if (p) {
+                pendingPromises.delete(msg.callId);
+                p.resolve(msg.content);
+            }
+        } else if (msg.type === 'editFileResult') {
+            const p = pendingPromises.get(msg.callId);
+            if (p) {
+                pendingPromises.delete(msg.callId);
+                p.resolve(msg.ok);
+            }
+        } else if (msg.type === 'invokeTool') {
             const { callId, name, args } = msg;
             try {
                 if (typeof mod.handleToolCall === 'function') {
@@ -94,7 +105,6 @@ async function main() {
         }
     };
 
-    // Activate plugin if possible
     let activated = false;
     try {
         if (mod && typeof mod.activate === 'function') {
@@ -109,7 +119,6 @@ async function main() {
 }
 
 main().catch((err) => {
-    // ensure worker crashes are visible
     try { (globalThis as any).postMessage({ type: 'fatal', message: String(err) }); } catch {}
     throw err;
 });

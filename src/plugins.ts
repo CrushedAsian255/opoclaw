@@ -75,9 +75,11 @@ export async function loadPlugins(config: any): Promise<void> {
                             const id = m.id;
                             unregisterTool(id);
                         } else if (m.type === 'readFile') {
-                            readFileAsync(m.rel, config.mounts).then(content => worker.postMessage({ type: 'readFileResult', content })).catch(err => worker.postMessage({ type: 'readFileResult', content: null }));
+                            const callId = m.callId;
+                            readFileAsync(m.rel, config.mounts).then(content => worker.postMessage({ type: 'readFileResult', callId, content })).catch(err => worker.postMessage({ type: 'readFileResult', callId, content: null }));
                         } else if (m.type === 'editFile') {
-                            editFile(m.rel, m.content, config.mounts).then(ok => worker.postMessage({ type: 'editFileResult', ok })).catch(err => worker.postMessage({ type: 'editFileResult', ok: false }));
+                            const callId = m.callId;
+                            editFile(m.rel, m.content, config.mounts).then(ok => worker.postMessage({ type: 'editFileResult', callId, ok })).catch(err => worker.postMessage({ type: 'editFileResult', callId, ok: false }));
                         } else if (m.type === 'invokeResult') {
                             const callId = m.callId;
                             const entry = pending.get(callId);
