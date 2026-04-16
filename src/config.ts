@@ -158,7 +158,7 @@ export interface OpoclawConfig {
     update_channel?: "stable" | "unstable";
     exposed_commands?: string[];
     enable_web_fetch?: boolean;
-    less_verbose_tools?: boolean;
+    tool_call_summaries?: "full" | "minimal" | "off";
     mounts?: Record<string, string>;
     search_provider?: "duckduckgo" | "tavily";
     tavily_api_key?: string;
