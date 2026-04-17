@@ -360,7 +360,7 @@ async function main() {
             name: "example-echo-plugin",
             version: "0.1.0",
             entry: "plugin.ts",
-            description: "Example plugin: registers one tool 'echo' and a simple skill.",
+            description: "Example plugin: registers one tool 'echo'.",
             permissions: { fileSystem: ["workspace"], tools: ["read_file"] },
         };
         writeFileSync(resolve(exampleDir, "plugin.json"), JSON.stringify(manifest, null, 2));
@@ -369,7 +369,6 @@ async function main() {
     context.registerTool({ id: 'echo', function: { name: 'echo', description: 'Echo input text', parameters: { type: 'object', properties: { text: { type: 'string', description: 'Text to echo back.' } }, required: ['text'] } } }, async (args) => {
         return String(args.text || '');
     });
-    context.registerSkill({ name: 'example-echo', content: '# Example Echo Skill\nUse this to echo.' });
 }
 
 export async function deactivate() {
