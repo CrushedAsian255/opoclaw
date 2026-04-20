@@ -8,6 +8,10 @@ import { existsSync } from "fs";
 
 const testPluginBase = path.resolve(process.cwd(), "workspace", "plugins");
 
+const TOOL_TEST_ECHO = "test_echo";
+const TOOL_TEST_VISIBLE = "test_tool_visible";
+const TOOL_TEST_UNLOAD = "test_unload";
+
 async function cleanupPlugin(name: string) {
   await unloadPlugin(name).catch(() => {});
   const pluginDir = path.join(testPluginBase, name);
@@ -85,14 +89,14 @@ describe("plugins", () => {
     await cleanupPlugin("test-tool-visible-plugin");
     await cleanupPlugin("test-unload-plugin");
     await cleanupPlugin("test-legacy-plugin");
-    unregisterTool("test_echo");
-    unregisterTool("test_tool_visible");
-    unregisterTool("test_unload");
+    unregisterTool(TOOL_TEST_ECHO);
+    unregisterTool(TOOL_TEST_VISIBLE);
+    unregisterTool(TOOL_TEST_UNLOAD);
   });
 
   test("loads a plugin and executes its registered tool", async () => {
-    await createPlugin("test-echo-plugin", "test_echo", `
-  if (name === 'test_echo') {
+    await createPlugin("test-echo-plugin", TOOL_TEST_ECHO, `
+  if (name === '${TOOL_TEST_ECHO}') {
     return 'echo:' + String(args.text || '');
   }
   throw new Error('unknown tool');`);
@@ -102,21 +106,21 @@ describe("plugins", () => {
     const loaded = listLoadedPlugins();
     expect(loaded.includes("test-echo-plugin")).toBe(true);
 
-    const out = await handleToolCall("test_echo", { text: "hello" }, cfg);
+    const out = await handleToolCall(TOOL_TEST_ECHO, { text: "hello" }, cfg);
     expect(out).toBe("echo:hello");
   });
 
   test("plugin tool is present in model tools after registration", async () => {
-    await createPlugin("test-tool-visible-plugin", "test_tool_visible", `
-  if (name === 'test_tool_visible') return 'ok';
+    await createPlugin("test-tool-visible-plugin", TOOL_TEST_VISIBLE, `
+  if (name === '${TOOL_TEST_VISIBLE}') return 'ok';
   throw new Error('unknown tool');`);
 
     const cfg = { enable_plugins: true, plugin_dir: testPluginBase, mounts: {} } as any;
     await loadPlugins(cfg);
 
-    expect(TOOLS.test_tool_visible).toBeDefined();
+    expect(TOOLS[TOOL_TEST_VISIBLE]).toBeDefined();
     const modelTools = getTools(cfg);
-    expect(modelTools.some((t: any) => t?.function?.name === "test_tool_visible")).toBe(true);
+    expect(modelTools.some((t: any) => t?.function?.name === TOOL_TEST_VISIBLE)).toBe(true);
   });
 
   test("legacy context plugin API is rejected", async () => {
@@ -129,17 +133,17 @@ describe("plugins", () => {
   });
 
   test("plugin tool unregistered after unload", async () => {
-    await createPlugin("test-unload-plugin", "test_unload", `
-  if (name === 'test_unload') return 'ok';
+    await createPlugin("test-unload-plugin", TOOL_TEST_UNLOAD, `
+  if (name === '${TOOL_TEST_UNLOAD}') return 'ok';
   throw new Error('unknown tool');`);
 
     const cfg = { enable_plugins: true, plugin_dir: testPluginBase, mounts: {} } as any;
     await loadPlugins(cfg);
 
-    expect(TOOLS.test_unload).toBeDefined();
+    expect(TOOLS[TOOL_TEST_UNLOAD]).toBeDefined();
 
     await unloadPlugin("test-unload-plugin");
 
-    expect(TOOLS.test_unload).toBeUndefined();
+    expect(TOOLS[TOOL_TEST_UNLOAD]).toBeUndefined();
   });
 });
