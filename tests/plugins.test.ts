@@ -83,12 +83,27 @@ export async function activate(context) {
 `);
 }
 
+async function createTraversalPlugin(name: string) {
+  const pluginDir = path.join(testPluginBase, name);
+  if (!existsSync(pluginDir)) await mkdir(pluginDir, { recursive: true });
+
+  const manifest = {
+    name,
+    version: "0.0.1",
+    entry: "../outside.ts",
+  };
+
+  await writeFile(path.join(pluginDir, "plugin.json"), JSON.stringify(manifest, null, 2));
+  await writeFile(path.join(pluginDir, "plugin.ts"), "export const tools = []; export async function invoke() { return ''; }");
+}
+
 describe("plugins", () => {
   afterEach(async () => {
     await cleanupPlugin("test-echo-plugin");
     await cleanupPlugin("test-tool-visible-plugin");
     await cleanupPlugin("test-unload-plugin");
     await cleanupPlugin("test-legacy-plugin");
+    await cleanupPlugin("test-traversal-plugin");
     unregisterTool(TOOL_TEST_ECHO);
     unregisterTool(TOOL_TEST_VISIBLE);
     unregisterTool(TOOL_TEST_UNLOAD);
@@ -130,6 +145,14 @@ describe("plugins", () => {
 
     expect(listLoadedPlugins().includes("test-legacy-plugin")).toBe(false);
     expect(TOOLS.legacy_echo).toBeUndefined();
+  });
+
+  test("entry path traversal is rejected", async () => {
+    await createTraversalPlugin("test-traversal-plugin");
+    const cfg = { enable_plugins: true, plugin_dir: testPluginBase, mounts: {} } as any;
+    await loadPlugins(cfg);
+
+    expect(listLoadedPlugins().includes("test-traversal-plugin")).toBe(false);
   });
 
   test("plugin tool unregistered after unload", async () => {

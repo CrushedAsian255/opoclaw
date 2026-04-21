@@ -18,7 +18,30 @@ export type OpenAIFunctionTool = {
 export type PluginInvokeContext = {
     config: Record<string, unknown>;
     root: string;
+    workspaceRoot: string;
     manifest: PluginManifest;
+    fs: {
+        plugin: {
+            readText: (relativePath: string) => Promise<string>;
+            readJson: <T = unknown>(relativePath: string) => Promise<T>;
+            writeText: (relativePath: string, content: string) => Promise<void>;
+            writeJson: (relativePath: string, value: unknown) => Promise<void>;
+            exists: (relativePath: string) => Promise<boolean>;
+            list: (relativePath?: string) => Promise<string[]>;
+            mkdir: (relativePath: string) => Promise<void>;
+            remove: (relativePath: string, recursive?: boolean) => Promise<void>;
+        };
+        workspace: {
+            readText: (relativePath: string) => Promise<string>;
+            readJson: <T = unknown>(relativePath: string) => Promise<T>;
+            writeText: (relativePath: string, content: string) => Promise<void>;
+            writeJson: (relativePath: string, value: unknown) => Promise<void>;
+            exists: (relativePath: string) => Promise<boolean>;
+            list: (relativePath?: string) => Promise<string[]>;
+            mkdir: (relativePath: string) => Promise<void>;
+            remove: (relativePath: string, recursive?: boolean) => Promise<void>;
+        };
+    };
 };
 
 export type PluginModule = {
@@ -32,6 +55,7 @@ export type HostInitMessage = {
     entry: string;
     config?: Record<string, unknown>;
     root?: string;
+    workspaceRoot?: string;
     manifest?: PluginManifest;
 };
 
@@ -70,7 +94,11 @@ export type WorkerErrorMessage = {
     message?: string;
 };
 
-export type PluginWorkerMessage = WorkerReadyMessage | WorkerInvokeResultMessage | WorkerLogMessage | WorkerErrorMessage;
+export type WorkerShutdownAckMessage = {
+    type: "shutdownAck";
+};
+
+export type PluginWorkerMessage = WorkerReadyMessage | WorkerInvokeResultMessage | WorkerLogMessage | WorkerErrorMessage | WorkerShutdownAckMessage;
 
 export function isOpenAIFunctionTool(value: unknown): value is OpenAIFunctionTool {
     if (!value || typeof value !== "object") return false;

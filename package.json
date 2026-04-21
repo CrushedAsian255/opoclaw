@@ -4,16 +4,17 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "bun-types": "latest"
   },
   "peerDependencies": {
-    "typescript": "latest"
+    "typescript": "^6.0.2"
   },
   "dependencies": {
-    "@iarna/toml": "latest",
-    "bun-types": "latest",
-    "discord.js": "latest",
-    "ollama": "latest",
-    "wasm-shell": "latest"
+    "@iarna/toml": "^2.2.5",
+    "discord.js": "^14.26.3",
+    "kleur": "^4.1.5",
+    "ollama": "^0.6.3",
+    "wasm-shell": "0.2.2"
   }
 }

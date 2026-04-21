@@ -145,13 +145,15 @@ export function getTools(config: OpoclawConfig): any[] {
         tools.push(TOOLS.mkdir, TOOLS.rm, TOOLS.mv, TOOLS.cp);
     }
 
-    const pluginTools = listPluginToolDescriptors();
-    for (const pluginTool of pluginTools) {
-        const pluginToolName = pluginTool?.function?.name;
-        if (typeof pluginToolName !== "string" || !pluginToolName) continue;
-        const exists = tools.some((tool) => tool?.function?.name === pluginToolName);
-        if (!exists) {
-            tools.push(pluginTool);
+    if (pluginsEnabled(config)) {
+        const pluginTools = listPluginToolDescriptors();
+        for (const pluginTool of pluginTools) {
+            const pluginToolName = pluginTool?.function?.name;
+            if (typeof pluginToolName !== "string" || !pluginToolName) continue;
+            const exists = tools.some((tool) => tool?.function?.name === pluginToolName);
+            if (!exists) {
+                tools.push(pluginTool);
+            }
         }
     }
 

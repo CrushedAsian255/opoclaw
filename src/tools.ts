@@ -1,7 +1,10 @@
 import { readFileAsync, getFilePath, editFile, listFiles, WORKSPACE_DIR, mkdirPath, removePath, movePath, copyPath } from "./workspace.ts";
 import { Ollama } from "ollama";
+import { readFileSync } from "fs";
 
-export const TOOLS: { [id: string]: any } = await Bun.file("src/tools.json").json();
+export const TOOLS: { [id: string]: any } = JSON.parse(
+    readFileSync(new URL("./tools.json", import.meta.url), "utf-8")
+);
 
 // Plugin tool registry: handlers provided by plugins at runtime
 const PLUGIN_TOOL_HANDLERS: Map<string, { descriptor: any; handler: (args: Record<string, any>, config: any) => Promise<string>; pluginId?: string }> = new Map();

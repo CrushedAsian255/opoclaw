@@ -21,6 +21,7 @@ type LoadedPlugin = {
     tools: string[];
     callCounter: number;
     pending: Map<string, PendingCall>;
+    shutdownAckResolver?: () => void;
 };
 
 const PLUGINS: Map<string, LoadedPlugin> = new Map();
@@ -84,8 +85,20 @@ async function spawnPluginWorker(manifest: PluginManifest, root: string, entryPa
     };
 
     const readyPromise = new Promise<void>((resolveReady, rejectReady) => {
+        let readyFinished = false;
+        const rejectIfPending = (error: Error) => {
+            if (readyFinished) return;
+            readyFinished = true;
+            rejectReady(error);
+        };
+        const resolveIfPending = () => {
+            if (readyFinished) return;
+            readyFinished = true;
+            resolveReady();
+        };
+
         const readyTimer = setTimeout(() => {
-            rejectReady(new Error(`Plugin ${manifest.name} did not become ready in time.`));
+            rejectIfPending(new Error(`Plugin ${manifest.name} did not become ready in time.`));
         }, READY_TIMEOUT_MS);
 
         worker.onmessage = (ev: MessageEvent<PluginWorkerMessage>) => {
@@ -96,11 +109,11 @@ async function spawnPluginWorker(manifest: PluginManifest, root: string, entryPa
                 clearTimeout(readyTimer);
                 const ok = registerPluginTools(loaded, msg.tools ?? []);
                 if (!ok) {
-                    rejectReady(new Error(`Plugin ${manifest.name} has no valid tools.`));
+                    rejectIfPending(new Error(`Plugin ${manifest.name} has no valid tools.`));
                     return;
                 }
                 loaded.active = true;
-                resolveReady();
+                resolveIfPending();
                 return;
             }
 
@@ -114,20 +127,36 @@ async function spawnPluginWorker(manifest: PluginManifest, root: string, entryPa
                 return;
             }
 
+            if (msg.type === "shutdownAck") {
+                if (loaded.shutdownAckResolver) {
+                    loaded.shutdownAckResolver();
+                    loaded.shutdownAckResolver = undefined;
+                }
+                return;
+            }
+
             if (msg.type === "error" || msg.type === "fatal") {
                 console.warn(`Plugin worker ${manifest.name} error: ${msg.message || "unknown"}`);
+                if (msg.type === "fatal") {
+                    if (!loaded.active) {
+                        clearTimeout(readyTimer);
+                        rejectIfPending(new Error(`Plugin ${manifest.name} reported fatal error before ready: ${msg.message || "unknown"}`));
+                    } else {
+                        void unloadPlugin(manifest.name);
+                    }
+                }
                 return;
             }
         };
 
         worker.onerror = (event: ErrorEvent) => {
             clearTimeout(readyTimer);
-            rejectReady(new Error(event.message || `Worker error for plugin ${manifest.name}`));
+            rejectIfPending(new Error(event.message || `Worker error for plugin ${manifest.name}`));
         };
 
         worker.onmessageerror = () => {
             clearTimeout(readyTimer);
-            rejectReady(new Error(`Worker message error for plugin ${manifest.name}`));
+            rejectIfPending(new Error(`Worker message error for plugin ${manifest.name}`));
         };
 
         const initMessage: HostInitMessage = {
@@ -135,6 +164,7 @@ async function spawnPluginWorker(manifest: PluginManifest, root: string, entryPa
             entry: pathToFileURL(entryPath).toString(),
             manifest,
             root,
+            workspaceRoot: resolve(root, ".."),
             config: config ?? {},
         };
         worker.postMessage(initMessage);
@@ -253,10 +283,21 @@ export async function unloadPlugin(name: string): Promise<void> {
     const p = PLUGINS.get(name);
     if (!p) return;
     try {
+        const shutdownAckPromise = new Promise<void>((resolveAck) => {
+            p.shutdownAckResolver = resolveAck;
+        });
+
         p.worker.postMessage({ type: "shutdown" });
+        await Promise.race([
+            shutdownAckPromise,
+            new Promise((resolve) => setTimeout(resolve, 500)),
+        ]);
+
         p.worker.terminate();
     } catch (err) {
         console.warn(`Error during plugin ${name} deactivate: ${err}`);
+    } finally {
+        p.shutdownAckResolver = undefined;
     }
 
     for (const [callId, pendingCall] of p.pending.entries()) {

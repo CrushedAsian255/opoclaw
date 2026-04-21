@@ -431,7 +431,8 @@ export const tools = [
 
 export async function invoke(name: string, args: Record<string, unknown>): Promise<string> {
     if (name === 'my_plugin_echo') {
-        return String(args.text || '');
+        const text = (args as { text?: unknown }).text;
+        return String(text || '');
     }
     throw new Error('Unknown tool: ' + String(name));
 }
