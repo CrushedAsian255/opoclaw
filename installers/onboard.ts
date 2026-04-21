@@ -458,6 +458,11 @@ Contract:
 - Export \`invoke(name, args, context)\`.
 - Optionally export \`deactivate()\`.
 
+Context filesystem helpers:
+
+- \`context.fs.plugin.*\` for files under your plugin directory.
+- \`context.fs.workspace.*\` for files under the workspace root.
+
 Notes:
 
 - Legacy plugin APIs are removed.

@@ -836,6 +836,7 @@ Toggle: channel.discord.allow_bots, enable_reasoning, reasoning_summary.
     case undefined:
       console.log(`
 ${banner()}
+
 ${k.blue("A lightweight AI agent framework")}
 
 ${k.bold("Commands:")}

@@ -1,7 +1,7 @@
 import type { HostInitMessage, OpenAIFunctionTool, PluginHostMessage, PluginInvokeContext, PluginModule } from "./plugin_api.ts";
 import { isOpenAIFunctionTool } from "./plugin_api.ts";
-import { resolve, sep } from "path";
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
+import { dirname, resolve } from "path";
+import { editFile, listFiles, mkdirPath, readFileAsync, removePath } from "./workspace.ts";
 
 function getExportedTools(mod: PluginModule): OpenAIFunctionTool[] {
     if (!Array.isArray(mod.tools)) return [];
@@ -38,51 +38,82 @@ let pluginContext: PluginInvokeContext = {
     },
 };
 
-function resolveInside(baseDir: string, relativePath: string): string {
-    const base = resolve(baseDir);
-    const candidate = resolve(base, relativePath || ".");
-    if (candidate !== base && !candidate.startsWith(base + sep)) {
-        throw new Error("Path escapes allowed root");
-    }
-    return candidate;
-}
+function createScopedFs(mountName: string, mounts: Record<string, string>) {
+    const withMount = (relativePath: string): string => {
+        const trimmed = String(relativePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+        if (!trimmed) return `${mountName}/`;
+        return `${mountName}/${trimmed}`;
+    };
 
-function createScopedFs(baseDir: string) {
+    const relativeFromMount = (fullPath: string): string | null => {
+        const normalized = fullPath.replace(/\\/g, "/");
+        const prefix = `${mountName}/`;
+        if (!normalized.startsWith(prefix)) return null;
+        return normalized.slice(prefix.length);
+    };
+
     return {
         readText: async (relativePath: string): Promise<string> => {
-            const full = resolveInside(baseDir, relativePath);
-            return await readFile(full, "utf-8");
+            return await readFileAsync(withMount(relativePath), mounts);
         },
         readJson: async <T = unknown>(relativePath: string): Promise<T> => {
-            const text = await readFile(resolveInside(baseDir, relativePath), "utf-8");
+            const text = await readFileAsync(withMount(relativePath), mounts);
             return JSON.parse(text) as T;
         },
         writeText: async (relativePath: string, content: string): Promise<void> => {
-            const full = resolveInside(baseDir, relativePath);
-            await mkdir(resolve(full, ".."), { recursive: true });
-            await writeFile(full, content, "utf-8");
+            const normalized = String(relativePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+            const parent = dirname(normalized);
+            if (parent && parent !== ".") {
+                mkdirPath(withMount(parent), mounts);
+            }
+            await editFile(withMount(relativePath), content, mounts);
         },
         writeJson: async (relativePath: string, value: unknown): Promise<void> => {
-            const full = resolveInside(baseDir, relativePath);
-            await mkdir(resolve(full, ".."), { recursive: true });
-            await writeFile(full, JSON.stringify(value, null, 2), "utf-8");
+            const normalized = String(relativePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+            const parent = dirname(normalized);
+            if (parent && parent !== ".") {
+                mkdirPath(withMount(parent), mounts);
+            }
+            await editFile(withMount(relativePath), JSON.stringify(value, null, 2), mounts);
         },
         exists: async (relativePath: string): Promise<boolean> => {
             try {
-                await stat(resolveInside(baseDir, relativePath));
+                await readFileAsync(withMount(relativePath), mounts);
                 return true;
             } catch {
-                return false;
+                try {
+                    const all = await listFiles(mounts);
+                    const target = String(relativePath || "").replace(/\\/g, "/").replace(/^\/+/, "");
+                    const asDirPrefix = target ? `${mountName}/${target}/` : `${mountName}/`;
+                    return all.some((p) => p.startsWith(asDirPrefix) || p === `${mountName}/${target}`);
+                } catch {
+                    return false;
+                }
             }
         },
         list: async (relativePath = "."): Promise<string[]> => {
-            return await readdir(resolveInside(baseDir, relativePath));
+            const all = await listFiles(mounts);
+            const requested = String(relativePath || ".").replace(/\\/g, "/").replace(/^\/+/, "");
+            const prefix = requested === "." || requested === "" ? `${mountName}/` : `${mountName}/${requested}/`;
+            const out = new Set<string>();
+            for (const p of all) {
+                const rel = relativeFromMount(p);
+                if (rel === null) continue;
+                if (requested !== "." && requested !== "" && !rel.startsWith(`${requested}/`) && rel !== requested) continue;
+                const tail = requested === "." || requested === ""
+                    ? rel
+                    : rel.startsWith(`${requested}/`) ? rel.slice(requested.length + 1) : "";
+                if (!tail) continue;
+                const first = tail.split("/")[0];
+                if (first) out.add(first);
+            }
+            return Array.from(out).sort();
         },
         mkdir: async (relativePath: string): Promise<void> => {
-            await mkdir(resolveInside(baseDir, relativePath), { recursive: true });
+            mkdirPath(withMount(relativePath), mounts);
         },
         remove: async (relativePath: string, recursive = false): Promise<void> => {
-            await rm(resolveInside(baseDir, relativePath), { recursive, force: true });
+            removePath(withMount(relativePath), recursive, mounts);
         },
     };
 }
@@ -98,14 +129,19 @@ async function initializePlugin(msg: HostInitMessage): Promise<void> {
     }
 
     pluginModule = mod;
+    const workerMounts: Record<string, string> = {
+        __plugin__: msg.root ?? "",
+        __workspace__: msg.workspaceRoot ?? resolve(msg.root ?? "", ".."),
+    };
+
     pluginContext = {
         config: msg.config ?? {},
         root: msg.root ?? "",
         workspaceRoot: msg.workspaceRoot ?? resolve(msg.root ?? "", ".."),
         manifest: msg.manifest ?? { name: "" },
         fs: {
-            plugin: createScopedFs(msg.root ?? ""),
-            workspace: createScopedFs(msg.workspaceRoot ?? resolve(msg.root ?? "", "..")),
+            plugin: createScopedFs("__plugin__", workerMounts),
+            workspace: createScopedFs("__workspace__", workerMounts),
         },
     };
 
