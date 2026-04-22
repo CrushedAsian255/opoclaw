@@ -75,6 +75,7 @@ export interface OpoclawConfig {
     mounts?: Record<string, string>;
     search_provider?: "duckduckgo" | "tavily";
     tavily_api_key?: string;
+    actual_shell?: boolean;
     // Plugin settings (tool-only worker runtime)
     enable_plugins?: boolean;
     plugin_dir?: string;

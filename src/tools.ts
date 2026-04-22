@@ -290,6 +290,27 @@ import { exec } from "child_process";
 
 const enc = new TextEncoder();
 
+async function runActualShellCommand(shellCommand: string): Promise<{ code: number; stdout: string; stderr: string }> {
+    const cmd = process.platform === "win32"
+        ? ["cmd.exe", "/d", "/s", "/c", shellCommand]
+        : ["sh", "-lc", shellCommand];
+
+    const proc = Bun.spawn({
+        cmd,
+        cwd: WORKSPACE_DIR,
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+
+    const [stdout, stderr, code] = await Promise.all([
+        proc.stdout ? new Response(proc.stdout).text() : Promise.resolve(""),
+        proc.stderr ? new Response(proc.stderr).text() : Promise.resolve(""),
+        proc.exited,
+    ]);
+
+    return { code, stdout, stderr };
+}
+
 export async function handleToolCall(
     name: string,
     args: Record<string, string>,
@@ -460,6 +481,19 @@ export async function handleToolCall(
             throw new Error("poll is only available in Discord.");
         }
         case "shell": {
+            if (!args.shell_command) throw new Error("Missing 'shell_command' argument for shell.");
+
+            if (config.actual_shell ?? false) {
+                const result = await runActualShellCommand(String(args.shell_command));
+                let output = "";
+
+                if (result.stdout.trim().length > 0) output += `stdout:\n\`\`\`${result.stdout.trim()}\`\`\`\n`;
+                if (result.stderr.trim().length > 0) output += `stderr:\n\`\`\`${result.stderr.trim()}\`\`\`\n`;
+                if (output.length === 0) output = "(no shell output)";
+                if (result.code !== 0) output = `Command exited with code ${result.code}.\n` + output;
+                return output.trim() + "\n(Current directory: ~)";
+            }
+
             if (!shellSetUp) {
                 shellSetUp = true;
                 if (getSemanticSearchEnabled(config)) {
@@ -498,7 +532,6 @@ export async function handleToolCall(
                     });
                 }
             }
-            if (!args.shell_command) throw new Error("Missing 'shell_command' argument for shell.");
             const result = await shell.exec(args.shell_command);
             let output = "";
 
