@@ -2,7 +2,7 @@
 
 - [x] channels/openai.ts
 - [ ] HEARTBEAT
-- [ ] `timer` tool
+- [x] `timer` tool
 - [ ] `session_status` tool
 - [ ] dreamer
 - [x] `compact` tool

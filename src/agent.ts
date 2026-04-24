@@ -863,6 +863,24 @@ export class AgentSession {
                                 })();
                                 return `Background subagent started (${id}). Label: ${label}.`;
                             }
+                            if (tc.function.name === "timer") {
+                                const seconds = Number(args.seconds);
+                                if (isNaN(seconds) || seconds <= 0) throw new Error("Invalid 'seconds' argument for timer. Must be a positive number.");
+                                const label = String(args.label || `timer-${Date.now()}`);
+                                const id = `timer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                                const job: BackgroundSubagentJob = {
+                                    id,
+                                    label,
+                                    request: `Timer for ${seconds} seconds`,
+                                    status: "running",
+                                };
+                                this.backgroundJobs.set(id, job);
+                                setTimeout(() => {
+                                    job.status = "done";
+                                    job.output = `Timer expired at ${new Date().toLocaleTimeString()}.`;
+                                }, seconds * 1000);
+                                return `Timer set for ${seconds} seconds (${id}). Label: ${label}.`;
+                            }
                             if (tc.function.name === "deep_research") {
                                 const deepResearchSessionId = this.sessionId ? `${this.sessionId}-deepresearch-${Date.now()}` : undefined;
                                 return await runDeepResearch(String(args.query || ""), config, callbacks.onDeepResearchSummary, deepResearchSessionId);
@@ -923,6 +941,9 @@ export class AgentSession {
             }
 
             this.messages.push({ role: "assistant", content: responseText });
+
+            // Final check for background results that might have finished during the last turn
+            this.injectBackgroundResultsIntoContext();
 
             return { text: responseText, reasoningSummary: reasoningSummaryText, ranTools: didRunTools };
         }

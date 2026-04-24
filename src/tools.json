@@ -392,5 +392,26 @@
                 "required": ["description", "shell_command"]
             }
         }
+    },
+    "timer": {
+        "type": "function",
+        "function": {
+            "name": "timer",
+            "description": "Set a timer for a given duration in seconds. When the timer expires, a message will be sent to you with the current time.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "seconds": {
+                        "type": "number",
+                        "description": "Duration in seconds."
+                    },
+                    "label": {
+                        "type": "string",
+                        "description": "Optional label for the timer."
+                    }
+                },
+                "required": ["seconds"]
+            }
+        }
     }
 }

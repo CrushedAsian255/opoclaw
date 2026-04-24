@@ -203,4 +203,45 @@ describe("agent", () => {
       globalThis.fetch = originalFetch as any;
     }
   });
+
+  test("timer tool injects completion into context after delay", async () => {
+    const originalFetch = globalThis.fetch;
+    let call = 0;
+    let injectedSeen = false;
+    globalThis.fetch = (async (_input: any, init?: any) => {
+      call++;
+      if (call === 1) {
+        return toolCallResponse("timer", { seconds: 0.1, label: "test-timer" });
+      }
+      
+      const body = JSON.parse(String(init?.body || "{}"));
+      const messages = body.messages || [];
+      if (JSON.stringify(messages).includes("Background subagent completed (test-timer)")) {
+        injectedSeen = true;
+      }
+      return textResponse("acknowledged");
+    }) as any;
+
+    try {
+      const session = new AgentSession();
+      session.addMessage({ role: "user", content: "set a timer for 0.1 seconds" });
+      
+      // First evaluation triggers the timer
+      await session.evaluate("system", {
+        provider: { active: "openrouter", openrouter: { api_key: "k", model: "m", base_url: "http://localhost" } },
+      } as any, dummyCallbacks);
+
+      // Wait for timer to expire
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Second evaluation should see the injected message
+      await session.evaluate("system", {
+        provider: { active: "openrouter", openrouter: { api_key: "k", model: "m", base_url: "http://localhost" } },
+      } as any, dummyCallbacks);
+
+      expect(injectedSeen).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch as any;
+    }
+  });
 });

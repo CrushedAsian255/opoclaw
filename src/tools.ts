@@ -620,6 +620,21 @@ const TOOL_DEFINITIONS = {
         },
         ["request"],
     ),
+    timer: defineTool(
+        "timer",
+        "Set a timer for a given duration in seconds. When the timer expires, a message will be sent to you with the current time.",
+        {
+            seconds: {
+                type: "number",
+                description: "Duration in seconds.",
+            },
+            label: {
+                type: "string",
+                description: "Optional label for the timer.",
+            },
+        },
+        ["seconds"],
+    ),
     web_fetch: defineTool(
         "web_fetch",
         "Fetch a web page and return its text content.",
