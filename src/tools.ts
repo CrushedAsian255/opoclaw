@@ -635,6 +635,12 @@ const TOOL_DEFINITIONS = {
         },
         ["seconds"],
     ),
+    session_status: defineTool(
+        "session_status",
+        "Get information about the current session, including the model, channel, context usage, and recent spending.",
+        {},
+        [],
+    ),
     web_fetch: defineTool(
         "web_fetch",
         "Fetch a web page and return its text content.",

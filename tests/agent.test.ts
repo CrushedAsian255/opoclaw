@@ -244,4 +244,32 @@ describe("agent", () => {
       globalThis.fetch = originalFetch as any;
     }
   });
+
+  test("session_status tool returns session info", async () => {
+    const originalFetch = globalThis.fetch;
+    let call = 0;
+    globalThis.fetch = (async () => {
+      call++;
+      if (call === 1) return toolCallResponse("session_status", {});
+      return textResponse("The status has been retrieved.");
+    }) as any;
+
+    try {
+      const session = new AgentSession("opoclaw-core-test");
+      session.addMessage({ role: "user", content: "what is the status?" });
+      const result = await session.evaluate("system", {
+        provider: { active: "openrouter", openrouter: { api_key: "k", model: "m", base_url: "http://localhost" } },
+      } as any, dummyCallbacks);
+      
+      const lastMessage = session.messages[session.messages.length - 2];
+      expect(lastMessage.role).toBe("tool");
+      expect(lastMessage.content).toContain("Session Status:");
+      expect(lastMessage.content).toContain("Model: m (openrouter)");
+      expect(lastMessage.content).toContain("Channel: core/terminal");
+      expect(lastMessage.content).toContain("Context Usage:");
+      expect(lastMessage.content).toContain("Spending (last 24h):");
+    } finally {
+      globalThis.fetch = originalFetch as any;
+    }
+  });
 });

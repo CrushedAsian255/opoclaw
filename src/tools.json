@@ -413,5 +413,17 @@
                 "required": ["seconds"]
             }
         }
+    },
+    "session_status": {
+        "type": "function",
+        "function": {
+            "name": "session_status",
+            "description": "Get information about the current session, including the model, channel, context usage, and recent spending.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     }
 }

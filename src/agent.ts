@@ -881,6 +881,43 @@ export class AgentSession {
                                 }, seconds * 1000);
                                 return `Timer set for ${seconds} seconds (${id}). Label: ${label}.`;
                             }
+                            if (tc.function.name === "session_status") {
+                                const modelId = getModelId(config);
+                                const provider = getActiveProvider(config);
+                                let channel = "unknown";
+                                if (this.sessionId?.startsWith("opoclaw-openai-")) channel = "openai";
+                                else if (this.sessionId?.startsWith("opoclaw-core-")) channel = "core/terminal";
+                                else if (this.sessionId?.includes("discord")) channel = "discord";
+                                else if (this.sessionId?.includes("irc")) channel = "irc";
+
+                                const usageStats = await loadUsage();
+                                const now = new Date();
+                                const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                                const recentSpending = usageStats.sessions
+                                    .filter(s => new Date(s.timestamp) >= oneDayAgo)
+                                    .reduce((acc, s) => acc + (s.cost || 0), 0);
+
+                                const messageCount = this.messages.length;
+                                let charCount = 0;
+                                for (const m of this.messages) {
+                                    if (typeof m.content === "string") charCount += m.content.length;
+                                    else if (Array.isArray(m.content)) {
+                                        for (const part of m.content) {
+                                            if (part.type === "text") charCount += (part.text || "").length;
+                                        }
+                                    }
+                                }
+                                const estimatedTokens = Math.ceil(charCount / 4);
+
+                                return [
+                                    "Session Status:",
+                                    `- Model: ${modelId} (${provider})`,
+                                    `- Channel: ${channel}`,
+                                    `- Context Usage: ~${estimatedTokens} tokens (${charCount} chars) in ${messageCount} messages.`,
+                                    `- Context Window: Model-dependent (check provider documentation for ${modelId}).`,
+                                    `- Spending (last 24h): $${recentSpending.toFixed(4)}`
+                                ].join("\n");
+                            }
                             if (tc.function.name === "deep_research") {
                                 const deepResearchSessionId = this.sessionId ? `${this.sessionId}-deepresearch-${Date.now()}` : undefined;
                                 return await runDeepResearch(String(args.query || ""), config, callbacks.onDeepResearchSummary, deepResearchSessionId);
