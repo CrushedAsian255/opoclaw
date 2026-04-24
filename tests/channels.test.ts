@@ -56,6 +56,32 @@ describe("channels", () => {
     });
   });
 
+  test("core chat endpoint returns assistant response", async () => {
+    const cfg = `\n[channel.discord]\nenabled = false\n[channel.irc]\nenabled = false\n[channel.openai]\nenabled = false\n\n[provider]\nactive = "openrouter"\n\n[provider.openrouter]\napi_key = "k"\nmodel = "m"\nbase_url = "http://localhost"\n`;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      const payload = `data: ${JSON.stringify({ choices: [{ delta: { content: "Core says hi" }, finish_reason: null }], usage: { prompt_tokens: 1, completion_tokens: 1 } })}\n\n` +
+        "data: [DONE]\n\n";
+      return new Response(payload, { status: 200 });
+    }) as any;
+
+    await withTempConfig(cfg, async () => {
+      try {
+        const res = await handleCoreRequest(new Request("http://127.0.0.1:6112/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: "t1", message: "hello" }),
+        }));
+        const data = await res.json() as any;
+        expect(res.status).toBe(200);
+        expect(data.ok).toBe(true);
+        expect(data.text).toBe("Core says hi");
+      } finally {
+        globalThis.fetch = originalFetch as any;
+      }
+    });
+  });
+
   test("openai models endpoint requires configured auth", async () => {
     const cfg = `\n[channel.openai]\nenabled = true\napi_key = "secret"\n\n[provider]\nactive = "openrouter"\n\n[provider.openrouter]\napi_key = "k"\nmodel = "m"\nbase_url = "http://localhost"\n`;
     await withTempConfig(cfg, async () => {

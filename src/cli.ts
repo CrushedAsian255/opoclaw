@@ -7,7 +7,11 @@ import { resolve, join } from "path";
 import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from "fs";
 import { execSync, spawn } from "child_process";
 import { homedir } from "os";
+import { createInterface } from "readline/promises";
+import { stdin as input, stdout as output } from "process";
 import kleur from "kleur";
+import type { ToolCall } from "./agent.ts";
+import { runCoreChatTurn } from "./channels/core.ts";
 
 // ── Paths ──────────────────────────────────────────────────────────────────
 
@@ -417,6 +421,78 @@ async function gatewayHibernate() {
     ok("Gateway hibernation enabled");
   } catch (e: any) {
     err(`Failed to enable hibernation: ${e.message}`);
+  }
+}
+
+async function chatTui() {
+  console.log(banner());
+  console.log(kleur.bold("opoclaw chat"));
+  console.log(kleur.dim("Type /exit to quit.\n"));
+
+  const rl = createInterface({ input, output });
+  const sessionKey = `cli-${Date.now().toString(36)}`;
+
+  const askYesNo = async (prompt: string, defaultNo = true): Promise<boolean> => {
+    const suffix = defaultNo ? " [y/N]: " : " [Y/n]: ";
+    const answer = (await rl.question(prompt + suffix)).trim().toLowerCase();
+    if (!answer) return !defaultNo;
+    return answer === "y" || answer === "yes";
+  };
+
+  try {
+    while (true) {
+      const text = (await rl.question(kleur.cyan("you> "))).trim();
+      if (!text) continue;
+      if (text === "/exit" || text === "/quit") break;
+
+      try {
+        const result = await runCoreChatTurn(sessionKey, text, {
+          approveTool: async (call: ToolCall, args: Record<string, any>) => {
+            const preview = (() => {
+              try {
+                const raw = JSON.stringify(args);
+                return raw.length > 300 ? raw.slice(0, 300) + "..." : raw;
+              } catch {
+                return "(invalid args)";
+              }
+            })();
+            return await askYesNo(`Authorize tool ${call.function.name} with args ${preview}?`, true);
+          },
+          requestPermission: async (message: string, title?: string) => {
+            const header = title?.trim() ? `${title}: ` : "";
+            return await askYesNo(`${header}${message || "Approve request?"}`, true);
+          },
+          askQuestion: async (question: string, options: string[], title?: string) => {
+            if (title?.trim()) console.log(kleur.magenta(title));
+            if (question?.trim()) console.log(question.trim());
+            for (let i = 0; i < options.length; i++) {
+              console.log(`${i + 1}. ${options[i]}`);
+            }
+            const raw = (await rl.question("Select option number (blank to cancel): ")).trim();
+            if (!raw) return null;
+            const idx = Number(raw) - 1;
+            if (!Number.isInteger(idx) || idx < 0 || idx >= options.length) {
+              console.log(kleur.yellow("Invalid selection."));
+              return null;
+            }
+            return { selected: options[idx]!, userLabel: "cli-user" };
+          },
+          onToolLine: (line: string) => {
+            const trimmed = line.trim();
+            if (trimmed) console.log(kleur.dim(`[tool] ${trimmed}`));
+          },
+        });
+
+        if (result.reasoningSummary && result.reasoningSummary.trim() && result.reasoningSummary.length < 200) {
+          console.log(kleur.dim(`# ${result.reasoningSummary.trim()}`));
+        }
+        console.log(kleur.green(`assistant> ${result.text}\n`));
+      } catch (e: any) {
+        console.log(kleur.red(`error> ${e?.message || String(e)}\n`));
+      }
+    }
+  } finally {
+    rl.close();
   }
 }
 
@@ -877,6 +953,10 @@ Toggle: channel.discord.allow_bots, enable_reasoning, reasoning_summary.
 `);
       break;
 
+    case "chat":
+      await chatTui();
+      break;
+
     case "help":
     case "--help":
     case "-h":
@@ -893,6 +973,7 @@ ${kleur.bold("Commands:")}
   gateway hibernate  Hibernate the gateway (requires approval to wake)
   gateway status     Check if gateway is running
   update [unstable]  Pull latest release and restart (use unstable channel)
+  chat               Start interactive terminal chat (Core channel)
   check-update       Check for available updates
   install            Install opoclaw command + optional service
   service install    Install auto-start service (systemd/launchd)

@@ -8,6 +8,27 @@ function sseResponse(payload: string): Response {
   return new Response(payload, { status: 200 });
 }
 
+function toolCallResponse(name: string, args: Record<string, any>, id = "tc1"): Response {
+  const toolChunk = JSON.stringify({
+    choices: [{
+      delta: {
+        tool_calls: [{ index: 0, id, function: { name, arguments: JSON.stringify(args) } }],
+      },
+      finish_reason: "tool_calls",
+    }],
+    usage: { prompt_tokens: 1, completion_tokens: 1 },
+  });
+  return new Response(`data: ${toolChunk}\n\ndata: [DONE]\n\n`, { status: 200 });
+}
+
+function textResponse(text: string): Response {
+  const textChunk = JSON.stringify({
+    choices: [{ delta: { content: text }, finish_reason: "stop" }],
+    usage: { prompt_tokens: 1, completion_tokens: 1 },
+  });
+  return new Response(`data: ${textChunk}\n\ndata: [DONE]\n\n`, { status: 200 });
+}
+
 const dummyCallbacks = { onFirstToken: () => {}, onToolCall: () => {}, onToolCallError: () => {} };
 
 describe("agent", () => {
@@ -88,6 +109,96 @@ describe("agent", () => {
           dummyCallbacks,
         )
       ).rejects.toThrow();
+    } finally {
+      globalThis.fetch = originalFetch as any;
+    }
+  });
+
+  test("run_subagent tool returns delegated output", async () => {
+    const originalFetch = globalThis.fetch;
+    let call = 0;
+    globalThis.fetch = (async () => {
+      call++;
+      if (call === 1) {
+        return toolCallResponse("run_subagent", { request: "delegate this", include_context: false });
+      }
+      if (call === 2) {
+        return textResponse("delegated result");
+      }
+      return textResponse("main final");
+    }) as any;
+
+    try {
+      const session = new AgentSession();
+      session.addMessage({ role: "user", content: "do delegation" });
+      const result = await session.evaluate("system", {
+        provider: { active: "openrouter", openrouter: { api_key: "k", model: "m", base_url: "http://localhost" } },
+      } as any, dummyCallbacks);
+      expect(result.text).toBe("main final");
+      const toolMsg = session.messages.find((m: any) => m.role === "tool" && m.name === "run_subagent");
+      expect(String(toolMsg?.content || "")).toContain("delegated result");
+    } finally {
+      globalThis.fetch = originalFetch as any;
+    }
+  });
+
+  test("compact tool replaces older context with summary", async () => {
+    const originalFetch = globalThis.fetch;
+    let call = 0;
+    globalThis.fetch = (async () => {
+      call++;
+      if (call === 1) {
+        return toolCallResponse("compact", { preserve_recent_messages: 4 });
+      }
+      if (call === 2) {
+        return textResponse("compacted summary paragraph one.\n\nparagraph two.");
+      }
+      return textResponse("after compact");
+    }) as any;
+
+    try {
+      const session = new AgentSession();
+      for (let i = 0; i < 10; i++) {
+        session.addMessage({ role: i % 2 === 0 ? "user" : "assistant", content: `message-${i}` });
+      }
+      await session.evaluate("system", {
+        provider: { active: "openrouter", openrouter: { api_key: "k", model: "m", base_url: "http://localhost" } },
+      } as any, dummyCallbacks);
+      expect(String(session.messages[0]?.content || "")).toContain("Conversation context summary");
+      expect(session.messages.length).toBeLessThanOrEqual(6);
+    } finally {
+      globalThis.fetch = originalFetch as any;
+    }
+  });
+
+  test("run_background_subagent injects completion into context", async () => {
+    const originalFetch = globalThis.fetch;
+    let call = 0;
+    let injectedSeen = false;
+    globalThis.fetch = (async (_input: any, init?: any) => {
+      call++;
+      if (call === 1) {
+        return toolCallResponse("run_background_subagent", { request: "background work", include_context: false, label: "bgtest" });
+      }
+      if (call === 2) {
+        return textResponse("background result payload");
+      }
+      if (call === 3) {
+        const body = JSON.parse(String(init?.body || "{}"));
+        const messages = body.messages || [];
+        injectedSeen = JSON.stringify(messages).includes("Background subagent completed");
+        return textResponse("main continues");
+      }
+      return textResponse("next turn response");
+    }) as any;
+
+    try {
+      const session = new AgentSession();
+      session.addMessage({ role: "user", content: "start background task" });
+      await session.evaluate("system", {
+        provider: { active: "openrouter", openrouter: { api_key: "k", model: "m", base_url: "http://localhost" } },
+      } as any, dummyCallbacks);
+      expect(injectedSeen).toBe(true);
     } finally {
       globalThis.fetch = originalFetch as any;
     }
