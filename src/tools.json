@@ -20,7 +20,7 @@
         "type": "function",
         "function": {
             "name": "edit_file",
-            "description": "Overwrite the contents of an existing file in the workspace. You cannot create new files or delete files — only edit files that already exist.",
+            "description": "Overwrite the contents of an existing file in the workspace. You cannot create new files or delete files - only edit files that already exist.",
             "parameters": {
                 "type": "object",
                 "properties": {

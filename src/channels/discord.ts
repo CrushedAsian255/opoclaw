@@ -18,6 +18,7 @@ import { resolve } from "path";
 import { unlink, readFile as readFileFs } from "fs/promises";
 import { readFileAsync } from "../workspace.ts";
 import { AgentSession, summarizeToolBatch, type Message as ChatMessage, type ToolCall } from "../agent.ts";
+import { requiresToolApproval } from "../tools.ts";
 import { getFilePath } from "../workspace.ts";
 
 import { getSemanticSearchEnabled, getVisionEnabled, loadConfig, useTomlFiles, getActiveProvider } from "../config.ts";
@@ -35,7 +36,6 @@ const client = new Client({
 const EYES = "👀";
 const THINKING = "🤔";
 const TOOL = "🔧";
-const APPROVAL_TOOLS = new Set(["edit_config", "restart_gateway", "hibernate_gateway", "update_opoclaw"]);
 const APPROVAL_TIMEOUT_MS = 60_000;
 const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 const OP_DIR = resolve(import.meta.dir, "../..");
@@ -451,7 +451,7 @@ export async function startDiscord(): Promise<void> {
             if (call.function.name === "request_permission" || call.function.name === "question" || call.function.name === "poll") {
                 return;
             }
-            if (APPROVAL_TOOLS.has(call.function.name)) {
+            if (requiresToolApproval(call.function.name)) {
                 return;
             }
             if (!gotToolCall) {
@@ -520,7 +520,7 @@ export async function startDiscord(): Promise<void> {
         };
 
         const requestToolApproval = async (call: ToolCall, uniqueId: string) => {
-            if (!APPROVAL_TOOLS.has(call.function.name)) {
+            if (!requiresToolApproval(call.function.name)) {
                 return { approved: true };
             }
 

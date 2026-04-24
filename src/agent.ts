@@ -1,5 +1,5 @@
-import { handleToolCall } from "./tools.ts";
-import { getApiBaseUrl, getApiKey, getModelId, getTools, getActiveProvider, type OpoclawConfig } from "./config.ts";
+import { getTools, handleToolCall } from "./tools.ts";
+import { getApiBaseUrl, getApiKey, getModelId, getActiveProvider, type OpoclawConfig } from "./config.ts";
 import { dirname, join } from "path";
 import { mkdir } from "fs/promises";
 import { fileURLToPath } from "url";

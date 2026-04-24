@@ -1,7 +1,6 @@
 import { resolve } from "path";
 import { existsSync, readFileSync } from "fs";
 import TOML from "@iarna/toml";
-import { TOOLS } from "./tools";
 
 const DEFAULT_CONFIG_FILE = resolve(import.meta.dir, "../config.toml");
 
@@ -111,35 +110,6 @@ export function getModelId(config: OpoclawConfig): string {
     if (active === "custom") return config.provider?.custom?.model || "unknown";
     if (active === "ollama") return config.provider?.ollama?.model || "llama3.2";
     return config.provider?.openrouter?.model || "openrouter/auto";
-}
-
-export function getTools(config: OpoclawConfig): any[] {
-    const tools = [
-        TOOLS.send_file,
-        TOOLS.search,
-        TOOLS.edit_config,
-        TOOLS.restart_gateway,
-        TOOLS.hibernate_gateway,
-        TOOLS.update_opoclaw,
-        TOOLS.use_skill,
-        TOOLS.list_skills,
-        TOOLS.deep_research,
-        TOOLS.react_message,
-        TOOLS.request_permission,
-        TOOLS.question,
-        TOOLS.poll,
-        TOOLS.shell,
-    ];
-
-    if (config.enable_web_fetch ?? true) {
-        tools.push(TOOLS.web_fetch);
-    }
-
-    if (config.basic_tools ?? true) {
-        tools.push(TOOLS.read_file, TOOLS.edit_file, TOOLS.list_files);
-    }
-
-    return tools;
 }
 
 export function getSemanticSearchEnabled(config: OpoclawConfig): boolean {

@@ -13,4 +13,5 @@ cache/
 logs/
 .claude/
 .vscode/
+.codex
 

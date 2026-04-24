@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile, readFile, mkdtemp, writeFile as writeFileFs, rm as rmFs } from "fs/promises";
 import { resolve, join } from "path";
 import { tmpdir } from "os";
-import { handleToolCall } from "../src/tools.ts";
+import { TOOLS, handleToolCall } from "../src/tools.ts";
 import { WORKSPACE_DIR } from "../src/workspace.ts";
 
 const TEST_DIR = resolve(WORKSPACE_DIR, "__tools_test__");
@@ -108,5 +108,10 @@ describe("tools", () => {
     } finally {
       globalThis.fetch = originalFetch as any;
     }
+  });
+
+  test("tools.json matches tool catalog", async () => {
+    const toolsJson = await Bun.file(resolve(import.meta.dir, "../src/tools.json")).json();
+    expect(toolsJson).toEqual(TOOLS);
   });
 });
