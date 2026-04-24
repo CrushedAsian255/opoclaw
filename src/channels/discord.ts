@@ -498,10 +498,10 @@ export async function startDiscord(): Promise<void> {
             }
         };
 
-        const onToolBatch = async (calls: ToolCall[], results: any[]) => {
+        const onToolBatch = async (calls: ToolCall[], results: any[], sessionId?: string) => {
             if (toolCallSummaries !== "minimal") return;
             try {
-                const summary = await summarizeToolBatch(calls, results, config);
+                const summary = await summarizeToolBatch(calls, results, config, sessionId);
                 const trimmed = summary.trim();
                 if (trimmed && trimmed !== "(no summary)") {
                     await (msg.channel as TextChannel).send(`-# ${trimmed}`);
@@ -818,6 +818,10 @@ export async function startDiscord(): Promise<void> {
             return undefined;
         };
 
+        const sessionId = config.provider?.openrouter?.use_session_ids !== false
+            ? `opoclaw-discord-${client.user!.id}-${msg.channelId}-${msg.id}`
+            : undefined;
+
         try {
             const { text: responseText, reasoningSummary } = await runAgent(
                 history,
@@ -830,6 +834,7 @@ export async function startDiscord(): Promise<void> {
                 onToolBatch,
                 onDeepResearchSummary,
                 executeTool,
+                sessionId
             );
 
             // Prefix reasoning summary if it's a real summary (not fallback)

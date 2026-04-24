@@ -193,7 +193,8 @@ async function streamCompletion(
     messages: Message[],
     config: OpoclawConfig,
     onFirstToken: () => void,
-    toolsOverride?: any[]
+    toolsOverride?: any[],
+    sessionId?: string
 ): Promise<{ text: string | null; toolCalls: ToolCall[]; usage: any; reasoning: string }> {
     if (isAnthropicCustom(config)) {
         const { system, messages: anthroMessages } = buildAnthropicMessages(messages);
@@ -278,7 +279,10 @@ async function streamCompletion(
             Authorization: `Bearer ${getApiKey(config)}`,
             "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+            ...body,
+            ...(sessionId != undefined ? { session_id: sessionId } : {})
+        }),
     });
 
     if (!response.ok) {
@@ -381,7 +385,8 @@ async function streamCompletion(
 
 async function generateReasoningSummary(
     reasoningText: string,
-    config: OpoclawConfig
+    config: OpoclawConfig,
+    sessionId?: string
 ): Promise<string> {
     if (isAnthropicCustom(config)) {
         return "(no summary)";
@@ -391,7 +396,7 @@ async function generateReasoningSummary(
         method: "POST",
         headers: {
             Authorization: `Bearer ${getApiKey(config)}`,
-            "Content-Type": "application/json",
+            "Content-Type": "application/json"
         },
         body: JSON.stringify({
             model,
@@ -403,6 +408,7 @@ async function generateReasoningSummary(
             ],
             stream: false,
             max_tokens: 500,
+            ...(sessionId != undefined ? {session_id: sessionId}:{})
         }),
     });
 
@@ -419,7 +425,8 @@ async function generateReasoningSummary(
 export async function summarizeToolBatch(
     calls: ToolCall[],
     results: ToolResult[],
-    config: OpoclawConfig
+    config: OpoclawConfig,
+    sessionId?: string
 ): Promise<string> {
     const summaryInput = results.map((r) => ({
         name: r.name,
@@ -466,6 +473,7 @@ export async function summarizeToolBatch(
             ],
             stream: false,
             max_tokens: 200,
+            ...(sessionId != undefined ? { session_id: sessionId } : {})
         }),
     });
 
@@ -501,7 +509,8 @@ function parseDeepResearchDocs(text: string): { title: string; content: string }
 export async function runDeepResearch(
     query: string,
     config: OpoclawConfig,
-    onSearchSummary?: (summary: string) => Promise<void>
+    onSearchSummary?: (summary: string) => Promise<void>,
+    sessionId?: string
 ): Promise<string> {
     const systemPrompt =
         "You are in Deep Research mode. Use search and web_fetch to gather information. " +
@@ -536,7 +545,7 @@ export async function runDeepResearch(
 
     for (let iteration = 0; iteration < 200; iteration++) {
         trimMessages();
-        const result = await streamCompletion(messages, config, () => {}, undefined);
+        const result = await streamCompletion(messages, config, () => {}, undefined, sessionId);
         const { text, toolCalls } = result;
 
         if (toolCalls.length > 0) {
@@ -564,7 +573,7 @@ export async function runDeepResearch(
                     searchCount += 1;
                     if (searchBatch.length >= 3 && onSearchSummary) {
                         try {
-                            const summary = await summarizeToolBatch([], searchBatch, config);
+                            const summary = await summarizeToolBatch([], searchBatch, config, sessionId);
                             const trimmed = summary.trim();
                             if (trimmed) {
                                 await onSearchSummary(trimmed);
@@ -605,9 +614,10 @@ export async function runAgent(
     onToolCall: (call: ToolCall, uniqueId: string) => void,
     onToolCallError: (uniqueId: string, error: Error) => void,
     requestToolApproval?: (call: ToolCall, uniqueId: string) => Promise<{ approved: boolean; message?: string }>,
-    onToolBatch?: (calls: ToolCall[], results: ToolResult[]) => Promise<void>,
+    onToolBatch?: (calls: ToolCall[], results: ToolResult[], sessionId?: string) => Promise<void>,
     onDeepResearchSummary?: (summary: string) => Promise<void>,
-    executeTool?: (call: ToolCall, args: Record<string, any>) => Promise<string | undefined>
+    executeTool?: (call: ToolCall, args: Record<string, any>) => Promise<string | undefined>,
+    sessionId?: string
 ): Promise<{ text: string; reasoningSummary?: string; ranTools?: boolean }> {
     const messages: Message[] = [
         { role: "system", content: systemPrompt },
@@ -626,7 +636,9 @@ export async function runAgent(
         const result = await streamCompletion(
             messages,
             config,
-            wrappedOnFirstToken
+            wrappedOnFirstToken,
+            undefined,
+            sessionId
         );
         const { text, toolCalls, usage } = result;
 
@@ -657,7 +669,7 @@ export async function runAgent(
                             if (handled !== undefined) return handled;
                         }
                         if (tc.function.name === "deep_research") {
-                            return await runDeepResearch(String(args.query || ""), config, onDeepResearchSummary);
+                            return await runDeepResearch(String(args.query || ""), config, onDeepResearchSummary, sessionId);
                         }
                         return await handleToolCall(tc.function.name, args, config);
                     };
@@ -691,7 +703,7 @@ export async function runAgent(
             }
 
             if (onToolBatch) {
-                await onToolBatch(toolCalls, toolResults);
+                await onToolBatch(toolCalls, toolResults, sessionId);
             }
 
             continue;
@@ -705,7 +717,8 @@ export async function runAgent(
         if (config.reasoning_summary && config.enable_reasoning && result.reasoning) {
             reasoningSummaryText = await generateReasoningSummary(
                 result.reasoning,
-                config
+                config,
+                sessionId
             );
         }
 

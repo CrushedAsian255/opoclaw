@@ -12,3 +12,5 @@ cache/
 .gateway.hibernate
 logs/
 .claude/
+.vscode/
+
