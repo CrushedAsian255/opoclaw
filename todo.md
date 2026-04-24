@@ -13,3 +13,4 @@
 - [ ] return of superior installers
 - [ ] plugins
 - [ ] actual shell access
+- [ ] tui for direct communication
