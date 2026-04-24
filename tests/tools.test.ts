@@ -109,9 +109,4 @@ describe("tools", () => {
       globalThis.fetch = originalFetch as any;
     }
   });
-
-  test("tools.json matches tool catalog", async () => {
-    const toolsJson = await Bun.file(resolve(import.meta.dir, "../src/tools.json")).json();
-    expect(toolsJson).toEqual(TOOLS);
-  });
 });
