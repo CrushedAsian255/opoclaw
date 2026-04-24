@@ -393,18 +393,17 @@ export async function startDiscord(): Promise<void> {
                 `\n## Skills\nAvailable skills: ${skills.map((s) => `\`${s}\``).join(", ")}\nTo use a skill, call the use_skill tool with the skill name. It will return the skill's SKILL.md instructions before you apply them.`
             );
         }
-    systemPromptParts.push(
-        `\n## Discord Context\nChannel ID: ${msg.channel.id}\nMessage IDs appear as \`[id:...]\` in history entries. Reactions are shown at the end like \`(reactions: 😄×2)\`. Use the \`react_message\` tool with \`channel_id\` and \`message_id\` to react.\nNever include \`[id:...]\` in your replies; IDs are only for tool calls.`
-    );
-    if (useToml) {
-        systemPromptParts.push("\n## TOML Editing\nIn your shell, you have a convenient CLI for easy editing. You can use `toml <file> <key> push <value>` to push a value to a key, or `toml <file> <key> remove <value>` to remove a value. If the key or file doesn't exist, it will be created for you.\nThis is the primary way you should be managing memory. You can for example use `toml memory.toml notes push \"<something you want to remember>\"` to add a note to your memory, which will persist across sessions.");
-    }
-    const pollSummary = getPollSummary(msg.channel.id);
-    if (pollSummary) systemPromptParts.push(pollSummary);
+        systemPromptParts.push(
+            `\n## Discord Context\nChannel ID: ${msg.channel.id}\nMessage IDs appear as \`[id:...]\` in history entries. Reactions are shown at the end like \`(reactions: 😄×2)\`. Use the \`react_message\` tool with \`channel_id\` and \`message_id\` to react.\nNever include \`[id:...]\` in your replies; IDs are only for tool calls.`
+        );
+        if (useToml) {
+            systemPromptParts.push("\n## TOML Editing\nIn your shell, you have a convenient CLI for easy editing. You can use `toml <file> <key> push <value>` to push a value to a key, or `toml <file> <key> remove <value>` to remove a value. If the key or file doesn't exist, it will be created for you.\nThis is the primary way you should be managing memory. You can for example use `toml memory.toml notes push \"<something you want to remember>\"` to add a note to your memory, which will persist across sessions.");
+        }
+        const pollSummary = getPollSummary(msg.channel.id);
+        if (pollSummary) systemPromptParts.push(pollSummary);
         const systemPrompt = systemPromptParts.join("\n") || "You are a helpful assistant.";
-
-    const userText = formatMentions(msg.content, msg).trim();
-    const idPrefix = `[id:${msg.id}] `;
+        const userText = formatMentions(msg.content, msg).trim();
+        const idPrefix = `[id:${msg.id}] `;
         const visionEnabled = getVisionEnabled(config);
         const imageAttachments = visionEnabled
             ? Array.from(msg.attachments.values()).filter((a) => (a.contentType || "").startsWith("image/"))
@@ -792,15 +791,15 @@ export async function startDiscord(): Promise<void> {
                     if (prior !== undefined) {
                         if (prior === idx) {
                             state.voters.delete(interaction.user.id);
-                            state.counts[prior] = Math.max(0, state.counts[prior] - 1);
+                            state.counts[prior] = Math.max(0, state.counts[prior] ?? 0 - 1);
                         } else {
-                            state.counts[prior] = Math.max(0, state.counts[prior] - 1);
+                            state.counts[prior] = Math.max(0, state.counts[prior] ?? 0 - 1);
                             state.voters.set(interaction.user.id, idx);
-                            state.counts[idx] += 1;
+                            state.counts[idx] = (state.counts[idx] ?? 0 ) + 1;
                         }
                     } else {
                         state.voters.set(interaction.user.id, idx);
-                        state.counts[idx] += 1;
+                        state.counts[idx] = (state.counts[idx] ?? 0 ) + 1;
                     }
 
                     state.updatedAt = Date.now();
@@ -840,32 +839,32 @@ export async function startDiscord(): Promise<void> {
             );
 
             // Prefix reasoning summary if it's a real summary (not fallback)
-        let finalResponse = responseText;
-            if (reasoningSummary && reasoningSummary.length < 200 &&
-                !reasoningSummary.includes("no summary") &&
-                !reasoningSummary.includes("failed") &&
-                !reasoningSummary.startsWith("The user") &&
-                !reasoningSummary.startsWith("I need to") &&
-                !reasoningSummary.startsWith("The assistant")) {
-                finalResponse = `-# ${reasoningSummary}
-${responseText}`;
+            let finalResponse = responseText;
+                if (reasoningSummary && reasoningSummary.length < 200 &&
+                    !reasoningSummary.includes("no summary") &&
+                    !reasoningSummary.includes("failed") &&
+                    !reasoningSummary.startsWith("The user") &&
+                    !reasoningSummary.startsWith("I need to") &&
+                    !reasoningSummary.startsWith("The assistant")) {
+                    finalResponse = `-# ${reasoningSummary}
+    ${responseText}`;
+                }
+
+            finalResponse = sanitizeModelOutput(finalResponse);
+
+            if (config.show_update_notification ?? true) {
+                const updateTag = await getUpdateTag();
+                if (updateTag) {
+                    finalResponse += `\n-# ⚠️ An update is available (${updateTag}). Run \`opoclaw update\` to update, or ask your agent to perform the update.`;
+                }
             }
 
-        finalResponse = sanitizeModelOutput(finalResponse);
-
-        if (config.show_update_notification ?? true) {
-            const updateTag = await getUpdateTag();
-            if (updateTag) {
-                finalResponse += `\n-# ⚠️ An update is available (${updateTag}). Run \`opoclaw update\` to update, or ask your agent to perform the update.`;
+            if (!finalResponse.trim() || finalResponse.trim() === "HEARTBEAT_OK") {
+                return;
             }
-        }
 
-        if (!finalResponse.trim() || finalResponse.trim() === "HEARTBEAT_OK") {
-            return;
-        }
-
-        // Split into chunks
-        const chunks = splitMessage(finalResponse);
+            // Split into chunks
+            const chunks = splitMessage(finalResponse);
             let fileSent = false;
 
             for (let i = 0; i < chunks.length; i++) {
@@ -929,11 +928,11 @@ ${responseText}`;
         await addReaction(msg, EYES);
     });
 
-function sanitizeModelOutput(text: string): string {
-    return text.replace(/\[id:\d+\]\s*/g, "");
-}
+    function sanitizeModelOutput(text: string): string {
+        return text.replace(/\[id:\d+\]\s*/g, "");
+    }
 
-function splitMessage(text: string, maxLen = 1990): string[] {
+    function splitMessage(text: string, maxLen = 1990): string[] {
         if (text.length <= maxLen) return [text];
         const chunks: string[] = [];
         let i = 0;
