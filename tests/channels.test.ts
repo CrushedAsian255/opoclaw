@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { handleCoreRequest } from "../src/channels/core.ts";
-import { startDiscord } from "../src/channels/discord.ts";
+import { startDiscord, formatDiscordMessage, DiscordMessage, type ClientUser, client } from "../src/channels/discord.ts";
 import { startIRC } from "../src/channels/irc.ts";
 import { handleOpenAIRequest, startOpenAI } from "../src/channels/openai.ts";
 import { provider } from "../src/provider/index.ts";
@@ -22,6 +22,76 @@ async function withTempConfig(contents: string, fn: () => Promise<void>) {
 }
 
 describe("channels", () => {
+  test("discord message formatter is correct", async () => {
+    client.user = {id:1} as unknown as ClientUser;
+    const message1 = {
+      id: 123123,
+      author: {
+        id: 123001,
+        username: "user1",
+        displayName: "User 1"
+      },
+      content: "hello!",
+      mentions: { users: {
+        values: ()=>([{
+          id: 1,
+          username: "Bot",
+          displayName: "Bot"
+        }])
+      }},
+      reactions: {cache: {values:()=>[
+        {emoji:{name:"hello1"},count:1},
+        {emoji:{name:"hello2"},count:5},
+      ]}}
+    } as unknown as DiscordMessage;
+    const response1 = await formatDiscordMessage(
+      message1
+    );
+    expect(response1?.role).toBe("user");
+    expect(response1?.content).toBe(
+      "=== Metadata ===\n"+
+      "Message ID: 123123\n"+
+      "Author: <@123001> user1, display name User 1\n"+
+      "Mentions:\n"+
+      " - <@1> Bot (you)\n"+
+      "Reactions: hello1 hello2×5\n"+
+      "=== Content ===\n"+
+      "hello!",
+    );
+
+    const response2 = await formatDiscordMessage(
+      {
+        id: 123123,
+        author: {
+          id: 1,
+          username: "user1",
+          displayName: "User 1"
+        },
+        content: "hello!",
+        mentions: {users: {values:()=>([])}},
+        reactions: {cache: {values:()=>[]}},
+        reference: {type:0,messageId:1},
+        channel: {messages:{fetch:(async ()=>{return message1})}}
+      } as unknown as DiscordMessage
+    );
+    expect(response2?.role).toBe("assistant");
+    expect(response2?.content).toBe(
+      "=== Referenced Message Metadata ===\n"+
+      "This message is a reply to the following message:\n"+
+      "Message ID: 123123\n"+
+      "Author: <@123001> user1, display name User 1\n"+
+      "Mentions:\n"+
+      " - <@1> Bot (you)\n"+
+      "=== Referenced Message Content ===\n"+
+      "hello!\n"+
+      "=== Metadata ===\n"+
+      "Message ID: 123123\n"+
+      "Author: <@1> user1, display name User 1 (you)\n"+
+      "=== Content ===\n"+
+      "hello!",
+    );
+  })
+
   test("startDiscord returns when disabled", async () => {
     const cfg = `\n[channel.discord]\nenabled = false\n`;
     await withTempConfig(cfg, async () => {
