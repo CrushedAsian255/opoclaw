@@ -938,7 +938,7 @@ export async function startDiscord(): Promise<void> {
  Lightweight Bun AI agent framework
  \u001b[34mhttps://github.com/oponic/opoclaw\u001b[0m
  \u001b[30moponic + others, 2026\u001b[0m
-
+ 
 \`\`\`
             `;
             await interaction.reply(about);
