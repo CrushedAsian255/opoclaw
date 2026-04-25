@@ -90,7 +90,7 @@ export async function startIRC(): Promise<void> {
             const key = target.startsWith("#") ? target : sender;
             const history = historyByTarget.get(key) || [];
 
-            const systemPrompt = await buildSystemPrompt(config);
+            const systemPrompt = await buildSystemPrompt(config, [], "irc");
 
             const userText = cleaned || "(empty message)";
             const historyWithUser = history.concat([{ role: "user", content: `[${sender}]: ${userText}` }]);
