@@ -147,6 +147,13 @@ function isStableTag(tag: string): boolean {
     return !/(alpha|beta|rc)/i.test(tag);
 }
 
+function TAG(): string {
+    const tag = VERSION.toLowerCase();
+    if (tag.includes("alpha")) return '\u001b[42m alpha \u001b[0m';
+    if (tag.includes("beta")) return '\u001b[41m beta \u001b[0m';
+    if (tag.includes("rc")) return '\u001b[45m rc \u001b[0m';
+}
+
 function baseVersion(tag: string): string {
     return tag.replace(/^v/i, "").split("-")[0] || tag;
 }
@@ -874,16 +881,19 @@ export async function startDiscord(): Promise<void> {
 
         if (interaction.commandName === "about") {
             const about = `
+\`\`\`ansi
+ 
+ ▄▄███▀                      ▀█              
+ ▀▀▄▄▄█▄  ▄▀▀▄ ▄▀▀▄ ▄▀▀▄ ▄▀▀▀ █  ▀▀▀▄ █ █ █  ${TAG()}
+   █████  ▀▄▄▀ █▄▄▀ ▀▄▄▀ ▀▄▄▄ █▄ ████ ▀▄▀▄▀
+    ▀▀▀        █
+
+ /u001b[1mopoclaw ${VERSION}/u001b[0m
+ Lightweight Bun AI agent framework
+ /u001b[34mhttps://github.com/oponic/opoclaw/u001b[0m
+ /u001b[30moponic + others, 2026/u001b[0m
+
 \`\`\`
-        ▜
-▛▌▛▌▛▌▛▘▐ ▀▌▌▌▌
-▙▌▙▌▙▌▙▖▐▖█▌▚▚▘
-  ▌
-\`\`\`
-opoclaw ${VERSION}
-Lightweight Bun AI agent framework
-<https://github.com/oponic/opoclaw>
--# oponic + others, 2026
             `;
             await interaction.reply(about);
         }
