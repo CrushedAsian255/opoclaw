@@ -262,12 +262,12 @@ describe("agent", () => {
       } as any, dummyCallbacks);
       
       const lastMessage = session.messages[session.messages.length - 2];
-      expect(lastMessage.role).toBe("tool");
-      expect(lastMessage.content).toContain("Session Status:");
-      expect(lastMessage.content).toContain("Model: m (openrouter)");
-      expect(lastMessage.content).toContain("Channel: core/terminal");
-      expect(lastMessage.content).toContain("Context Usage:");
-      expect(lastMessage.content).toContain("Spending (last 24h):");
+      expect(lastMessage!.role).toBe("tool");
+      expect(lastMessage!.content).toContain("Session Status:");
+      expect(lastMessage!.content).toContain("Model: m (openrouter)");
+      expect(lastMessage!.content).toContain("Channel: core/terminal");
+      expect(lastMessage!.content).toContain("Context Usage:");
+      expect(lastMessage!.content).toContain("Spending (last 24h):");
     } finally {
       globalThis.fetch = originalFetch as any;
     }
