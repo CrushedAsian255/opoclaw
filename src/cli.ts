@@ -41,7 +41,12 @@ const info = (s: string) => console.log(`${kleur.cyan("[opoclaw]")} ${s}`);
 const ok = (s: string) => console.log(`${kleur.green("✓")} ${s}`);
 const warn = (s: string) => console.log(`${kleur.yellow("⚠")} ${s}`);
 const err = (s: string) => console.error(`${kleur.red("✗")} ${s}`);
-const banner = () => kleur.dim().bold("    ") + kleur.bold("  ▜      \n") + kleur.dim().bold("▛▌▛▌▛▌") + kleur.bold("▛▘▐ ▀▌▌▌▌\n") + kleur.dim().bold("▙▌▙▌▙▌") + kleur.bold("▙▖▐▖█▌▚▚▘\n") + kleur.dim().bold("  ▌\n");
+const banner = () => (
+  kleur.dim().bold("      ") + kleur.bold("  ▜      \n") +
+  kleur.dim().bold("▛▌▛▌▛▌") + kleur.bold("▛▘▐ ▀▌▌▌▌\n") + 
+  kleur.dim().bold("▙▌▙▌▙▌") + kleur.bold("▙▖▐▖█▌▚▚▘\n") + 
+  kleur.dim().bold("  ▌\n")
+);
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
