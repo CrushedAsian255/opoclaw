@@ -26,7 +26,14 @@ export async function setHibernating(value: boolean): Promise<void> {
     } catch {}
 }
 
-function renderSystemPrompt(template: string): string {
+const CHANNEL_CONTEXT: Record<string, string> = {
+    discord: "You are operating in a Discord channel context.",
+    terminal: "You are operating in a terminal (CLI) context.",
+    openai: "You are operating via the OpenAI-compatible API.",
+    irc: "You are operating in an IRC channel context.",
+};
+
+function renderSystemPrompt(template: string, channel: string): string {
     const now = new Date();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     const date = now.toLocaleDateString("en-US", {
@@ -35,19 +42,14 @@ function renderSystemPrompt(template: string): string {
         month: "long",
         day: "2-digit",
     });
-    const time = now.toLocaleTimeString("en-US", {
-        timeZone: tz,
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-    });
+    const channelContext = CHANNEL_CONTEXT[channel] ?? `You are operating in a ${channel} context.`;
     return template
         .replaceAll("{{DATE}}", date)
-        .replaceAll("{{TIME}}", time)
-        .replaceAll("{{TIMEZONE}}", tz);
+        .replaceAll("{{TIMEZONE}}", tz)
+        .replaceAll("{{CHANNEL_CONTEXT}}", channelContext);
 }
 
-export async function buildSystemPrompt(config: OpoclawConfig, extraSections: string[] = []): Promise<string> {
+export async function buildSystemPrompt(config: OpoclawConfig, extraSections: string[] = [], channel = "terminal"): Promise<string> {
     const useToml = useTomlFiles(config);
     const [systemBase, agentsContent, soulContent, identityContent, memoryContent, skills] = await Promise.all([
         Bun.file(SYSTEM_PROMPT_FILE).text().catch(() => ""),
@@ -59,7 +61,7 @@ export async function buildSystemPrompt(config: OpoclawConfig, extraSections: st
     ]);
 
     const parts: string[] = [];
-    if (systemBase) parts.push(renderSystemPrompt(systemBase));
+    if (systemBase) parts.push(renderSystemPrompt(systemBase, channel));
     if (soulContent) parts.push(soulContent);
     if (identityContent) {
         parts.push(

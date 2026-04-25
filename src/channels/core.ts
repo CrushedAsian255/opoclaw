@@ -61,7 +61,7 @@ export async function runCoreChatTurn(
     }
 
     session.addMessage({ role: "user", content: userText });
-    const systemPrompt = await buildSystemPrompt(config);
+    const systemPrompt = await buildSystemPrompt(config, [], "terminal");
 
     const onToolCall = (call: ToolCall) => {
         if (toolCallSummaries === "off") return;

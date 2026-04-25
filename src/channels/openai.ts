@@ -156,6 +156,7 @@ export async function handleOpenAIRequest(req: Request, config = loadConfig()): 
         extraSystemMessages.length > 0
             ? [`\n## API Request Context\n${extraSystemMessages.join("\n\n")}`]
             : [],
+        "openai",
     );
     const session = new AgentSession(`opoclaw-openai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 

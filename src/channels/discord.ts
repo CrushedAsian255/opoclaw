@@ -345,7 +345,7 @@ export async function startDiscord(): Promise<void> {
         ];
         const pollSummary = getPollSummary(msg.channel.id);
         if (pollSummary) extraSections.push(pollSummary);
-        const systemPrompt = await buildSystemPrompt(config, extraSections);
+        const systemPrompt = await buildSystemPrompt(config, extraSections, "discord");
         const visionEnabled = getVisionEnabled(config);
         const imageAttachments = visionEnabled
             ? Array.from(msg.attachments.values()).filter((a) => (a.contentType || "").startsWith("image/"))

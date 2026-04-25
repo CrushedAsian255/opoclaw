@@ -641,6 +641,18 @@ const TOOL_DEFINITIONS = {
         {},
         [],
     ),
+    get_time: defineTool(
+        "get_time",
+        "Get the current time as an ISO 8601 datetime string and UNIX epoch. The result does not update automatically — call this tool again every time you need the current time.",
+        {},
+        [],
+        {
+            handler: async () => {
+                const now = new Date();
+                return JSON.stringify({ iso: now.toISOString(), unix: Math.floor(now.getTime() / 1000) });
+            },
+        },
+    ),
     web_fetch: defineTool(
         "web_fetch",
         "Fetch a web page and return its text content.",
