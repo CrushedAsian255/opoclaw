@@ -15,20 +15,26 @@ import {
     StringSelectMenuBuilder,
     REST,
     Routes,
-    type ChatInputCommandInteraction,
+    User,
+    ReactionManager,
+    MessageReferenceType,
+    type ClientUser
 } from "discord.js";
+export { Message as DiscordMessage };
+export type {ClientUser};
 import { AgentSession, summarizeToolBatch, type Message as ChatMessage, type ToolCall } from "../agent.ts";
 import { requiresToolApproval } from "../tools/index.ts";
 import { getFilePath } from "../workspace.ts";
 import { getVisionEnabled, loadConfig, getActiveProvider, getModelId } from "../config.ts";
 import { isHibernating, setHibernating, buildSystemPrompt, OP_DIR } from "./shared.ts";
 import { execSync } from "child_process";
+import { format } from "path";
 
 function exec(cmd: string, opts?: { cwd?: string }): string {
   return execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], ...opts }).trim();
 }
 
-const client = new Client({
+export const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
@@ -177,14 +183,6 @@ function pickLatestTag(tags: string[], channel: "stable" | "unstable", currentTa
     return null;
 }
 
-function formatMentions(text: string, msg: Message): string {
-    return text.replace(/<@!?(\d+)>/g, (_full, id) => {
-        const user = msg.mentions.users.get(id);
-        const name = user?.username || `user_${id}`;
-        return `@${name}`;
-    });
-}
-
 async function removeReaction(msg: Message, emoji: string): Promise<void> {
     try {
         const reaction = msg.reactions.cache.get(emoji);
@@ -228,36 +226,84 @@ async function awaitButtonApproval(prompt: Message, authorizedUserId: string): P
     return approved;
 }
 
-function formatDiscordMessage(m: Message, imageAttachments?: { url: string }[]): ChatMessage | null {
-    const isBot = m.author.id === client.user!.id;
-    const text = formatMentions(m.content, m).trim();
-    if (!text && m.attachments.size === 0) return null;
+function formatAuthor(u: User): string {
+    let string = `<@${u.id}> ${u.username}`;
+    if(u.username != u.displayName) {
+        string += `, display name ${u.displayName}`;
+    }
+    if(u.id == client.user!.id) {
+        string += " (you)";
+    } else if (u.bot) {
+        string += " (bot)";
+    }
+    return string;
+}
 
-    const reactionList = Array.from(m.reactions.cache.values())
+function formatReactions(rm: ReactionManager): string {
+    return Array.from(rm.cache.values())
         .map((r) => `${r.emoji.name}${r.count && r.count > 1 ? `×${r.count}` : ""}`)
         .join(" ");
-    const reactionSuffix = reactionList ? ` (reactions: ${reactionList})` : "";
-    const idPrefix = `[id:${m.id}] `;
+}
 
-    if (isBot) {
-        const cleanedText = text
+export async function formatDiscordMessage(m: Message, imageAttachments?: { url: string }[]): Promise<ChatMessage | null> {
+    let message_formatted = "";
+    if(m.reference && m.reference.type == MessageReferenceType.Default && m.reference.messageId) {
+        const ref_m = await m.channel.messages.fetch(m.reference.messageId);
+        if(ref_m) {
+            message_formatted += "=== Referenced Message Metadata ===\n";
+            message_formatted += "This message is a reply to the following message:\n";
+            message_formatted += `Message ID: ${ref_m.id}\n`;
+            message_formatted += `Author: ${formatAuthor(ref_m.author)}\n`;
+            const mentions = Array.from(ref_m.mentions.users.values());
+            if(mentions.length > 0) {
+                message_formatted += "Mentions:\n";
+                for(let mention of mentions) {
+                    message_formatted += ` - ${formatAuthor(mention)}\n`;
+                }
+            }
+            message_formatted += "=== Referenced Message Content ===\n";
+            message_formatted += ref_m.content;
+            message_formatted += "\n";
+        }
+    }
+
+    message_formatted += "=== Metadata ===\n";
+    message_formatted += `Message ID: ${m.id}\n`;
+    message_formatted += `Author: ${formatAuthor(m.author)}\n`;
+    const mentions = Array.from(m.mentions.users.values());
+    if(mentions.length > 0) {
+        message_formatted += "Mentions:\n";
+        for(let mention of mentions) {
+            message_formatted += ` - ${formatAuthor(mention)}\n`;
+        }
+    }
+    const reactions = formatReactions(m.reactions);
+    if(reactions) {
+        message_formatted += `Reactions: ${reactions}\n`;
+    }
+    message_formatted += "=== Content ===\n";
+    
+    if (m.author.id === client.user!.id) {
+        const cleanedText = m.content
             .split("\n")
-            .filter((line) => !line.trim().startsWith("-#"))
+            .filter((line: string) => !line.trim().startsWith("-#"))
             .join("\n")
             .trim();
         if (!cleanedText) return null;
-        return { role: "assistant", content: `${idPrefix}${cleanedText}${reactionSuffix}` };
+        message_formatted += cleanedText;
+        return { role: "assistant", content: message_formatted };
     }
-
-    const textContent = `${idPrefix}[${m.author.displayName} (${m.author.username})]: ${text}${reactionSuffix}`;
+    
+    message_formatted += m.content;
+    
     if (imageAttachments && imageAttachments.length > 0) {
-        const parts: any[] = [{ type: "text", text: textContent }];
+        const parts: any[] = [{ type: "text", text: message_formatted }];
         for (const img of imageAttachments) {
             parts.push({ type: "image_url", image_url: { url: img.url } });
         }
         return { role: "user", content: parts };
     }
-    return { role: "user", content: textContent };
+    return { role: "user", content: message_formatted };
 }
 
 async function buildChannelHistory(msg: Message): Promise<ChatMessage[]> {
@@ -269,7 +315,7 @@ async function buildChannelHistory(msg: Message): Promise<ChatMessage[]> {
     const history: ChatMessage[] = [];
     for (const m of sorted) {
         if (m.id === msg.id) continue;
-        const formatted = formatDiscordMessage(m);
+        const formatted = await formatDiscordMessage(m);
         if (formatted) history.push(formatted);
     }
 
@@ -317,7 +363,7 @@ export async function startDiscord(): Promise<void> {
 
         // Track all messages for context, but only respond to mentions or replies
         if (!isMention && !isReplyToBot) {
-            const formatted = formatDiscordMessage(msg);
+            const formatted = await formatDiscordMessage(msg);
             if (formatted) session.addMessage(formatted);
             return;
         }
@@ -368,7 +414,7 @@ export async function startDiscord(): Promise<void> {
             ? Array.from(msg.attachments.values()).filter((a) => (a.contentType || "").startsWith("image/"))
             : [];
 
-        const formatted = formatDiscordMessage(msg, imageAttachments.length > 0 ? imageAttachments : undefined);
+        const formatted = await formatDiscordMessage(msg, imageAttachments.length > 0 ? imageAttachments : undefined);
         if (formatted) session.addMessage(formatted);
 
         let swappedToThinking = false;
@@ -687,9 +733,9 @@ export async function startDiscord(): Promise<void> {
                     if (prior !== undefined) {
                         if (prior === idx) {
                             state.voters.delete(interaction.user.id);
-                            state.counts[prior] = Math.max(0, state.counts[prior] ?? 0 - 1);
+                            state.counts[prior] = Math.max(0, (state.counts[prior] ?? 0) - 1);
                         } else {
-                            state.counts[prior] = Math.max(0, state.counts[prior] ?? 0 - 1);
+                            state.counts[prior] = Math.max(0, (state.counts[prior] ?? 0) - 1);
                             state.voters.set(interaction.user.id, idx);
                             state.counts[idx] = (state.counts[idx] ?? 0 ) + 1;
                         }
@@ -917,3 +963,4 @@ export async function startDiscord(): Promise<void> {
     }
     await client.login(discordCfg.token);
 }
+
