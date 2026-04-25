@@ -9,6 +9,7 @@ interface Message {
     tool_calls?: ToolCall[];
     tool_call_id?: string;
     name?: string;
+    reasoning_details?: Record<string,string>[];
 }
 
 export interface ToolCall {
@@ -105,6 +106,13 @@ function buildAnthropicMessages(messages: Message[]): { system: string; messages
     return { system, messages: out };
 }
 
+interface LLMResponse {
+    text: string | null;
+    toolCalls: ToolCall[];
+    usage: any;
+    reasoning: string;
+    reasoning_details: Record<string,string>[];
+}
 
 async function streamCompletion(
     messages: Message[],
@@ -112,7 +120,7 @@ async function streamCompletion(
     onFirstToken: () => void,
     toolsOverride?: any[],
     sessionId?: string
-): Promise<{ text: string | null; toolCalls: ToolCall[]; usage: any; reasoning: string }> {
+): Promise<LLMResponse> {
     if (isAnthropicCustom(config)) {
         const { system, messages: anthroMessages } = buildAnthropicMessages(messages);
         const tools = (toolsOverride ?? getTools(config)).map((t: any) => ({
@@ -174,7 +182,7 @@ async function streamCompletion(
               }
             : null;
 
-        return { text: textBuffer || null, toolCalls, usage, reasoning: "" };
+        return { text: textBuffer || null, toolCalls, usage, reasoning: "", reasoning_details: [] };
     }
 
     const body: any = {
@@ -213,6 +221,7 @@ async function streamCompletion(
     let textBuffer = "";
     let firstToken = false;
     const toolCallMap: Record<number, { id: string; name: string; arguments: string }> = {};
+    const reasoningDetailsMap: Record<number, Record<string, string>> = {};
     let finishReason: string | null = null;
     let usage: any = null;
     let reasoningBuffer = "";
@@ -288,6 +297,22 @@ async function streamCompletion(
                     onFirstToken();
                 }
             }
+
+            if (delta.reasoning_details) {
+                for(const rd of delta.reasoning_details) {
+                    const idx: number = rd.index ?? 0;
+                    if(!reasoningDetailsMap[idx]) {
+                        reasoningDetailsMap[idx] = {};
+                    }
+                    for(const [k, v] of rd) {
+                        if(k == "index") continue;
+                        if(!reasoningDetailsMap[idx][k]) {
+                            reasoningDetailsMap[idx][k] = "";
+                        }
+                        reasoningDetailsMap[idx][k] += v;
+                    }
+                }
+            }
         }
     }
 
@@ -297,7 +322,12 @@ async function streamCompletion(
         function: { name: tc.name, arguments: tc.arguments },
     }));
 
-    return { text: textBuffer || null, toolCalls, usage, reasoning: reasoningBuffer };
+    const reasoningDetails: Record<string,string>[] = Object.entries(reasoningDetailsMap).map(([k,v])=>({
+        id: k,
+        ...v
+    }));
+
+    return { text: textBuffer || null, toolCalls, usage, reasoning: reasoningBuffer, reasoning_details: reasoningDetails };
 }
 
 async function generateReasoningSummary(
@@ -694,7 +724,7 @@ export class AgentSession {
                 options?.tools,
                 this.sessionId
             );
-            const { text, toolCalls, usage } = result;
+            const { text, toolCalls, usage, reasoning_details } = result;
 
             if (usage) {
                 await recordUsage(usage, getModelId(config));
@@ -706,6 +736,7 @@ export class AgentSession {
                     role: "assistant",
                     content: text,
                     tool_calls: toolCalls,
+                    reasoning_details: reasoning_details
                 });
 
                 const toolResults: ToolResult[] = [];
