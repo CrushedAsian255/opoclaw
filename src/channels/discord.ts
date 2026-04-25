@@ -22,7 +22,11 @@ import { requiresToolApproval } from "../tools/index.ts";
 import { getFilePath } from "../workspace.ts";
 import { getVisionEnabled, loadConfig, getActiveProvider } from "../config.ts";
 import { isHibernating, setHibernating, buildSystemPrompt, OP_DIR } from "./shared.ts";
-import { exec } from "../cli.ts";
+import { execSync } from "child_process";
+
+function exec(cmd: string, opts?: { cwd?: string }): string {
+  return execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], ...opts }).trim();
+}
 
 const client = new Client({
     intents: [

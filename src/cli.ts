@@ -59,7 +59,7 @@ function getOS(): "macos" | "linux" | "windows" {
 
 
 
-export function exec(cmd: string, opts?: { cwd?: string }): string {
+function exec(cmd: string, opts?: { cwd?: string }): string {
   return execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], ...opts }).trim();
 }
 
