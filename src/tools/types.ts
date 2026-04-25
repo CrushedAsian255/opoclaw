@@ -1,4 +1,5 @@
 import type { OpoclawConfig } from "../config.ts";
+import type { AgentSession } from "../agent.ts";
 
 export type ToolArgs = Record<string, any>;
 export type PendingFileSend = { path: string; caption: string } | null;
@@ -18,6 +19,7 @@ export type ToolSchema = {
 
 export type ToolContext = {
     config: OpoclawConfig;
+    session: AgentSession;
     setPendingFileSend?: (value: PendingFileSend) => void;
 };
 
