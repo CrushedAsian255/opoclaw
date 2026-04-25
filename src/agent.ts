@@ -636,14 +636,20 @@ export class AgentSession {
     }
 
     private trimContextByChars(): void {
+
+        const MAX_USER_MESSAGES = 50;
+        const USER_MESSAGES_TO_KEEP = 40;
+        const MAX_TOTAL_MESSAGES = 100;
+        const MAX_CHAR_COUNT = 100_000;
+
         const msgLen = (m: Message): number => {
             const c = typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "");
             return c.length;
         };
 
         const userCount = this.messages.filter(m => m.role === "user").length;
-        if (userCount > 50) {
-            const toDrop = userCount - 39;
+        if (userCount > MAX_USER_MESSAGES) {
+            const toDrop = userCount - USER_MESSAGES_TO_KEEP - 1;
             let dropped = 0;
             let cutIndex = 0;
             for (let i = 0; i < this.messages.length; i++) {
@@ -661,13 +667,13 @@ export class AgentSession {
         }
         const minSafeLength = distFromEnd + 1;
 
-        if (this.messages.length > 60) {
-            const toRemove = this.messages.length - Math.max(60, minSafeLength);
+        if (this.messages.length > MAX_TOTAL_MESSAGES) {
+            const toRemove = this.messages.length - Math.max(MAX_TOTAL_MESSAGES, minSafeLength);
             if (toRemove > 0) this.messages.splice(0, toRemove);
         }
 
         let total = this.messages.reduce((s, m) => s + msgLen(m), 0);
-        while (total > 100000 && this.messages.length > minSafeLength) {
+        while (total > MAX_CHAR_COUNT && this.messages.length > minSafeLength) {
             total -= msgLen(this.messages[0]!);
             this.messages.splice(0, 1);
         }
