@@ -23,7 +23,7 @@ export interface CompletionResult {
     toolCalls: ToolCall[];
     usage: any;
     reasoning: string;
-    reasoning_details: Record<string,string>[];
+    reasoning_details?: Record<string,string>[];
 }
 
 export type ProviderFn = (
