@@ -38,8 +38,8 @@ const SYSTEMD_PATH = `/etc/systemd/system/${SYSTEMD_NAME}`;
 // ── Colors ─────────────────────────────────────────────────────────────────
 
 const info = (s: string) => console.log(`${kleur.bgBlue().white().bold(" INFO ")} ${s}`);
-const ok = (s: string) => console.log(`${kleur.bgGreen().black().bold(" OK ")} ${s}`);
-const warn = (s: string) => console.log(`${kleur.bgYellow().black().bold(" WARN ")} ${s}`);
+const ok = (s: string) => console.log(`${kleur.bgGreen().white().bold(" OK ")} ${s}`);
+const warn = (s: string) => console.log(`${kleur.bgYellow().white().bold(" WARN ")} ${s}`);
 const err = (s: string) => console.error(`${kleur.bgRed().white().bold(" ERROR ")} ${s}`);
 const label = (s: string) => kleur.cyan().bold(s);
 const value = (s: string) => kleur.white(s);
