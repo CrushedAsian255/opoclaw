@@ -22,12 +22,12 @@ import {
 } from "discord.js";
 export { Message as DiscordMessage };
 export type {ClientUser};
-import { AgentSession, summarizeToolBatch, type Message as ChatMessage, type ToolCall } from "../agent.ts";
-import { requiresToolApproval } from "../tools/index.ts";
-import { getFilePath } from "../workspace.ts";
-import { getVisionEnabled, loadConfig, getActiveProvider, getModelId } from "../config.ts";
-import { isHibernating, setHibernating, buildSystemPrompt, OP_DIR } from "./shared.ts";
-import { exec, getUpdateTag } from "../utils.ts";
+import { AgentSession, summarizeToolBatch, type Message as ChatMessage, type ToolCall } from "../../agent.ts";
+import { requiresToolApproval } from "../../tools/index.ts";
+import { getFilePath } from "../../workspace.ts";
+import { getVisionEnabled, loadConfig, getActiveProvider, getModelId } from "../../config.ts";
+import { isHibernating, setHibernating, buildSystemPrompt, OP_DIR } from "../shared.ts";
+import { exec, getUpdateTag } from "../../utils.ts";
 
 export const client = new Client({
     intents: [

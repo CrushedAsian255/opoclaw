@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { handleCoreRequest } from "../src/channels/core.ts";
-import { startDiscord, formatDiscordMessage, DiscordMessage, type ClientUser, client } from "../src/channels/discord.ts";
+import { startDiscord, formatDiscordMessage, DiscordMessage, type ClientUser, client } from "../src/channels/discord/index.ts";
 import { startIRC } from "../src/channels/irc.ts";
 import { handleOpenAIRequest, startOpenAI } from "../src/channels/openai.ts";
 import { provider } from "../src/provider/index.ts";
