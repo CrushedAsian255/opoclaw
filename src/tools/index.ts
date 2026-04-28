@@ -24,10 +24,6 @@ const TOOL_DEFINITIONS = {
 
 export type ToolName = keyof typeof TOOL_DEFINITIONS;
 
-export const TOOLS = Object.fromEntries(
-    Object.entries(TOOL_DEFINITIONS).map(([name, definition]) => [name, definition.tool]),
-) as Record<ToolName, ToolSchema>;
-
 export const APPROVAL_TOOL_NAMES = new Set<ToolName>(
     (Object.entries(TOOL_DEFINITIONS) as [ToolName, ToolDefinition][])
         .filter(([, definition]) => definition.requiresApproval)
@@ -44,16 +40,12 @@ export function getTools(config: OpoclawConfig): ToolSchema[] {
         .map(([, definition]) => definition.tool);
 }
 
-export function getToolsFiltered(config: OpoclawConfig, exclude: string[], include?: string[]): ToolSchema[] {
+export function getToolsFiltered(config: OpoclawConfig, exclude: ToolName[], include?: ToolName[]): ToolSchema[] {
     return getTools(config).filter(tool=>{
-        if(exclude.includes(tool.function.name)) return false;
+        if(exclude.includes(tool.function.name as ToolName)) return false;
         if(include == undefined) return true;
-        return include.includes(tool.function.name);
+        return include.includes(tool.function.name as ToolName);
     })
-}
-
-export function getToolDefinition(name: string): ToolDefinition | undefined {
-    return TOOL_DEFINITIONS[name as ToolName];
 }
 
 export async function handleToolCall(
@@ -62,7 +54,7 @@ export async function handleToolCall(
     context: ToolContext,
 ): Promise<string> {
     console.log(`Handling tool call: ${name} with args ${JSON.stringify(args)}`);
-    const definition = getToolDefinition(name);
+    const definition = TOOL_DEFINITIONS[name as ToolName];
     if (!definition) {
         throw new Error(`Unknown tool: ${name}`);
     }

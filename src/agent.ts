@@ -130,7 +130,7 @@ export async function runDeepResearch(
     return `Deep Research Docs:\n\n${compiled}`;
 }
 
-export interface AgentCallbacks {
+interface AgentCallbacks {
     onFirstToken?: () => void,
     onToolCall?: (call: ToolCall, uniqueId: string) => void,
     onToolCallError?: (uniqueId: string, error: Error) => void,

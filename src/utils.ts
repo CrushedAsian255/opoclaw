@@ -63,7 +63,7 @@ function pickLatestTag(tags: string[], channel: "stable" | "unstable", currentTa
     return null;
 }
 
-export function getCurrentTag(): string | undefined {
+function getCurrentTag(): string | undefined {
     const currentTag = runGit("git describe --tags --abbrev=0 2>/dev/null || echo ''");
     if (!currentTag) {
         cachedUpdateTag = null;

@@ -16,7 +16,7 @@ import { runCoreChatTurn } from "./channels/core.ts";
 // ── Paths ──────────────────────────────────────────────────────────────────
 
 const OP_DIR = resolve(import.meta.dir, "..");
-import { loadConfig, getConfigPath, formatTOMLValue, parseTOML, toTOML } from "./config.ts";
+import { getConfigPath, formatTOMLValue, parseTOML, toTOML } from "./config.ts";
 import { exec, checkForUpdate, doUpdate } from "./utils.ts";
 
 const USAGE_FILE = resolve(OP_DIR, "usage.json");
