@@ -18,10 +18,7 @@ import {
     User,
     ReactionManager,
     MessageReferenceType,
-    type ClientUser
 } from "discord.js";
-export { Message as DiscordMessage };
-export type {ClientUser};
 import { AgentSession, summarizeToolBatch, type Message as ChatMessage, type ToolCall } from "../../agent.ts";
 import { requiresToolApproval } from "../../tools/index.ts";
 import { getFilePath } from "../../workspace.ts";
