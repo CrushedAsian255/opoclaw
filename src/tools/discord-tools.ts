@@ -121,4 +121,13 @@ export const DISCORD_TOOLS = {
             handler: discordOnlyHandler("poll"),
         },
     ),
+    check_polls: defineTool(
+        "check_polls",
+        "Check the status of any active polls.",
+        {},
+        [],
+        {
+            handler: discordOnlyHandler("check_polls"),
+        }
+    )
 } satisfies Record<string, ToolDefinition>;

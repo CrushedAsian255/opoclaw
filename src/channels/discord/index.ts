@@ -96,7 +96,7 @@ function formatPoll(state: PollState): { embed: EmbedBuilder; content: string } 
 
 function getPollSummary(channelId: string): string {
     const polls = Array.from(POLLS.values()).filter((p) => p.channelId === channelId);
-    if (polls.length === 0) return "";
+    if (polls.length === 0) return "No active polls";
     const lines = polls.map((p) => {
         const total = p.counts.reduce((a, b) => a + b, 0);
         const options = p.options
@@ -487,8 +487,6 @@ async function onMessage(client: Client, msg: Message) {
     const extraSections = [
         `\n## Discord Context\nChannel ID: ${msg.channel.id}\nMessage IDs appear as \`[id:...]\` in history entries. Reactions are shown at the end like \`(reactions: 😄×2)\`. Use the \`react_message\` tool with \`channel_id\` and \`message_id\` to react.\nNever include \`[id:...]\` in your replies; IDs are only for tool calls.`,
     ];
-    const pollSummary = getPollSummary(msg.channel.id);
-    if (pollSummary) extraSections.push(pollSummary);
     const systemPrompt = await buildSystemPrompt(config, extraSections, "discord");
     const visionEnabled = getVisionEnabled(config);
     const imageAttachments = visionEnabled
@@ -680,6 +678,11 @@ async function onMessage(client: Client, msg: Message) {
 
             return handlePoll(msg, title, question, options);
         }
+
+        if(call.function.name === "check_polls") {
+            return getPollSummary(msg.channel.id);
+        }
+        
         return undefined;
     };
 
