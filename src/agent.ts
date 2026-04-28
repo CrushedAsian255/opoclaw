@@ -1,4 +1,4 @@
-import { getTools, handleToolCall, type ToolContext } from "./tools/index.ts";
+import { getTools, getToolsFiltered, handleToolCall } from "./tools";
 import type { ToolSchema } from "./tools/types.ts";
 import { getActiveProvider, getModelId, type OpoclawConfig } from "./config.ts";
 import { recordUsage } from "./usage.ts";
@@ -118,7 +118,7 @@ export async function runDeepResearch(
         },
     }, {
         maxIterations: 200,
-        tools: getTools(config).filter(t => ["search", "web_fetch", "get_time"].includes(t.function.name)),
+        tools: getToolsFiltered(config, [], ["search", "web_fetch", "get_time"])
     });
 
     const docs = parseDeepResearchDocs(result.text || "");
@@ -154,11 +154,13 @@ export class AgentSession {
     messages: Message[];
     currentSystemPrompt: string = "";
     pendingFileSend: { path: string; caption: string } | null = null;
+    isSubagent: boolean = false;
     private backgroundJobs = new Map<string, BackgroundSubagentJob>();
 
-    constructor(sessionId: string) {
+    constructor(sessionId: string, isSubagent?: boolean) {
         this.sessionId = sessionId;
         this.messages = [];
+        if(isSubagent) {this.isSubagent = true;}
     }
 
 
@@ -354,7 +356,7 @@ export class AgentSession {
                 [systemMessage, ...this.messages],
                 config,
                 wrappedOnFirstToken,
-                options?.tools,
+                options?.tools ?? getTools(config),
                 this.sessionId
             );
             const { text, toolCalls, usage, reasoning_details } = result;

@@ -9,7 +9,7 @@ import { SHELL_TOOLS } from "./shell-tool.ts";
 import type { ToolArgs, ToolContext, ToolSchema, ToolDefinition } from "./types.ts";
 import type { OpoclawConfig } from "../config.ts";
 
-export type { ToolContext } from "./types.ts";
+export type { ToolContext, ToolSchema } from "./types.ts";
 
 const TOOL_DEFINITIONS = {
     ...FILE_TOOLS,
@@ -42,6 +42,14 @@ export function getTools(config: OpoclawConfig): ToolSchema[] {
     return (Object.entries(TOOL_DEFINITIONS) as [ToolName, ToolDefinition][])
         .filter(([, definition]) => definition.enabled?.(config) ?? true)
         .map(([, definition]) => definition.tool);
+}
+
+export function getToolsFiltered(config: OpoclawConfig, exclude: string[], include?: string[]): ToolSchema[] {
+    return getTools(config).filter(tool=>{
+        if(exclude.includes(tool.function.name)) return false;
+        if(include == undefined) return true;
+        return include.includes(tool.function.name);
+    })
 }
 
 export function getToolDefinition(name: string): ToolDefinition | undefined {

@@ -1,5 +1,6 @@
 import { getApiBaseUrl, getApiKey, getModelId, type OpoclawConfig } from "../config.ts";
 import type { Message, ToolCall, CompletionResult } from "./types.ts";
+import type { ToolSchema } from "../tools/types.ts";
 
 function buildAnthropicMessages(messages: Message[]): { system: string; messages: any[] } {
     let system = "";
@@ -79,12 +80,11 @@ export async function generateCompletion(
     messages: Message[],
     config: OpoclawConfig,
     onFirstToken: () => void,
-    toolsOverride?: any[],
+    tools: ToolSchema[],
 ): Promise<CompletionResult> {
     const { system, messages: anthroMessages } = buildAnthropicMessages(messages);
 
-    const { getTools } = await import("../tools/index.ts");
-    const tools = (toolsOverride ?? getTools(config)).map((t: any) => ({
+    const formatted_tools = (tools??[]).map(t => ({
         name: t.function.name,
         description: t.function.description,
         input_schema: t.function.parameters,
@@ -96,8 +96,8 @@ export async function generateCompletion(
         messages: anthroMessages,
         max_tokens: config.provider?.custom?.max_tokens ?? 1024,
     };
-    if (tools.length > 0) {
-        body.tools = tools;
+    if (formatted_tools.length > 0) {
+        body.tools = formatted_tools;
         body.tool_choice = { type: "auto" };
     }
 

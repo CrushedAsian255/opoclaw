@@ -1,5 +1,5 @@
 import type { OpoclawConfig } from "../config.ts";
-
+import type { ToolSchema } from "../tools";
 export interface Message {
     role: "system" | "user" | "assistant" | "tool";
     content: any | null;
@@ -30,6 +30,6 @@ export type ProviderFn = (
     messages: Message[],
     config: OpoclawConfig,
     onFirstToken: () => void,
-    toolsOverride: any[] | undefined,
+    tools: ToolSchema[],
     sessionId: string
 ) => Promise<CompletionResult>;

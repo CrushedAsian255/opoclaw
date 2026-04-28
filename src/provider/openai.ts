@@ -1,13 +1,13 @@
 import OpenAI from "openai";
 import { getApiBaseUrl, getApiKey, getActiveProvider, getModelId, type OpoclawConfig } from "../config.ts";
-import { getTools } from "../tools/index.ts";
+import { type ToolSchema } from "../tools/index.ts";
 import type { Message, ToolCall, CompletionResult } from "./types.ts";
 
 export async function generateCompletion(
     messages: Message[],
     config: OpoclawConfig,
     onFirstToken: () => void,
-    toolsOverride: any[] | undefined,
+    tools: ToolSchema[],
     sessionId: string,
 ): Promise<CompletionResult> {
     const client = new OpenAI({
@@ -15,7 +15,6 @@ export async function generateCompletion(
         baseURL: `${getApiBaseUrl(config)}/v1`,
     });
 
-    const tools = toolsOverride ?? getTools(config);
     const requestParams: any = {
         model: getModelId(config),
         messages: messages as any,
