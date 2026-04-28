@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, writeFile, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { type ClientUser, Message as DiscordMessage } from "discord.js";
+import { type Client, Message as DiscordMessage } from "discord.js";
 import { handleCoreRequest } from "../src/channels/core.ts";
-import { startDiscord, formatDiscordMessage, client } from "../src/channels/discord/index.ts";
+import { startDiscord, formatDiscordMessage } from "../src/channels/discord";
 import { startIRC } from "../src/channels/irc.ts";
 import { handleOpenAIRequest, startOpenAI } from "../src/channels/openai.ts";
 import { provider } from "../src/provider/index.ts";
@@ -24,7 +24,7 @@ async function withTempConfig(contents: string, fn: () => Promise<void>) {
 
 describe("channels", () => {
   test("discord message formatter is correct", async () => {
-    client.user = {id:1} as unknown as ClientUser;
+    const client = {user:{id:1}} as any;
     const message1 = {
       id: 123123,
       author: {
@@ -45,9 +45,7 @@ describe("channels", () => {
         {emoji:{name:"hello2"},count:5},
       ]}}
     } as unknown as DiscordMessage;
-    const response1 = await formatDiscordMessage(
-      message1
-    );
+    const response1 = await formatDiscordMessage(client,message1 );
     expect(response1?.role).toBe("user");
     expect(response1?.content).toBe(
       "=== Metadata ===\n"+
@@ -60,7 +58,7 @@ describe("channels", () => {
       "hello!",
     );
 
-    const response2 = await formatDiscordMessage(
+    const response2 = await formatDiscordMessage(client,
       {
         id: 123123,
         author: {
