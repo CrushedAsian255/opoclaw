@@ -1,6 +1,6 @@
 import { resolve } from "path";
 import { unlinkSync, writeFileSync } from "fs";
-import { startDiscord } from "./discord.ts";
+import { startDiscord } from "./discord/index.ts";
 import { startIRC } from "./irc.ts";
 import { startOpenAI } from "./openai.ts";
 import { AgentSession, summarizeToolBatch, type ToolCall } from "../agent.ts";
