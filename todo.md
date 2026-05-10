@@ -14,3 +14,10 @@
 - [x] tui for direct communication
 - [x] fix up tools
 - [x] gateway manager
+- [ ] OpenRouter attribution
+```
+defaultHeaders: {
+    "HTTP-Referer": "https://github.com/oponic/opoclaw",
+    "X-Title": "opoclaw",
+  },
+```
