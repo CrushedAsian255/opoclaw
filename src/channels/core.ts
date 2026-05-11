@@ -232,6 +232,10 @@ export async function startCore() {
         await startDiscord();
     } catch (err: any) {
         console.error(`Discord channel failed to start: ${err.message}`);
+        if (process.env.EXIT_ON_DISCORD_FAIL) {
+            clearGatewayPid();
+            process.exit(1);
+        }
         console.error("Discord channel startup failed; continuing");
     }
 
